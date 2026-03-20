@@ -3,27 +3,153 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Recipe Scraper</title>
+  <title>Macleay Recipe Manager</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     [hidden] { display: none !important; }
-    :root { --red:#c0392b; --red-dark:#a93226; --bg:#faf7f2; --card:#fff; --border:#e8e0d8; --text:#2d2d2d; --muted:#777; }
+    :root {
+      --font-scale: 1;
+      --red: #c0392b; --red-dark: #a93226; --bg: #faf7f2; --card: #fff;
+      --border: #e8e0d8; --text: #2d2d2d; --muted: #777;
+      --header-bg: #c0392b;
+    }
 
-    body { font-family:'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+    [data-theme="dark"] {
+      --bg: #1c1c1e; --card: #2c2c2e; --border: #3a3a3c;
+      --text: #f0f0f0; --muted: #ababab; --header-bg: #7b1e1e;
+    }
+    [data-theme="dark"] .menu-dropdown { background: #2c2c2e; border: 1px solid #3a3a3c; }
+    [data-theme="dark"] .menu-dropdown button { color: var(--text); }
+    [data-theme="dark"] .menu-dropdown button:hover { background: #3a3a3c; }
+    [data-theme="dark"] .img-modal { background: #2c2c2e; }
+    [data-theme="dark"] .img-modal input, [data-theme="dark"] .img-modal textarea,
+    [data-theme="dark"] .img-modal select { background: #1c1c1e; color: var(--text); border-color: var(--border); }
+    [data-theme="dark"] .recipe-card, [data-theme="dark"] .grid-card,
+    [data-theme="dark"] .shop-add-card, [data-theme="dark"] .shop-entry { background: var(--card); }
+    [data-theme="dark"] .btn-ghost { background: #3a3a3c; color: var(--text); }
+    [data-theme="dark"] .btn-ghost:hover { background: #4a4a4c; }
+    [data-theme="dark"] .grid-controls select, [data-theme="dark"] .shop-search-bar select,
+    [data-theme="dark"] .shop-search-bar input, [data-theme="dark"] .search-bar input,
+    [data-theme="dark"] .inline-input, [data-theme="dark"] .inline-textarea { background: var(--card); color: var(--text); border-color: var(--border); }
+    [data-theme="dark"] .shop-browser-card { background: var(--card); }
+    [data-theme="dark"] .site-badge { background: rgba(255,255,255,0.1); color: #ffaaaa; border: 1px solid rgba(255,100,100,0.3); }
+    [data-theme="dark"] .grid-cat-badge { background: rgba(255,255,255,0.13); color: rgba(255,255,255,0.88); }
+    [data-theme="dark"] .section-title { filter: brightness(1.7) saturate(0.7); }
+    [data-theme="dark"] .gm-meal-header { background: #1c1c1e; }
+    [data-theme="dark"] .gm-meal-header:hover { background: #2a2a2c; }
+    [data-theme="dark"] .gm-recipe-list { background: #242426; }
+    [data-theme="dark"] .gm-meal-block { border-color: #3a3a3c; }
+    [data-theme="dark"] .hero-placeholder-btn { background: #3a1a1a; }
+    [data-theme="dark"] .cat-tag { background: rgba(255,255,255,0.13); color: #ffaaaa; border: 1px solid rgba(255,100,100,0.25); }
+    [data-theme="dark"] .editable-title:hover { background: rgba(255,255,255,0.08); }
+    [data-theme="dark"] .editable-span:hover { background: rgba(255,255,255,0.08); }
+    [data-theme="dark"] .group-header-editable:hover { background: rgba(255,255,255,0.08); }
+    [data-theme="dark"] .ing-text:hover { background: rgba(255,255,255,0.08); }
+    [data-theme="dark"] .step-text:hover { background: rgba(255,255,255,0.08); }
+    [data-theme="dark"] .inline-input { background: #1c1c1e; }
+    [data-theme="dark"] .inline-textarea { background: #1c1c1e; }
+    [data-theme="dark"] .scaled-badge { background: rgba(255,220,100,0.18); color: #f0c060; }
+    [data-theme="dark"] .make-default-btn { color: var(--muted); border-color: #555; }
+    [data-theme="dark"] .make-default-btn:hover { border-color: #ff9080; color: #ff9080; }
+    [data-theme="dark"] .meal-badge { background: rgba(80,140,255,0.18); color: #7aadff; }
+    [data-theme="dark"] .btn-success { background: rgba(60,160,80,0.2); color: #6ecf7e; }
+    [data-theme="dark"] .btn-danger { background: rgba(192,57,43,0.2); color: #ff8a7a; }
+    [data-theme="dark"] .import-type-cookbook { background: rgba(80,140,255,0.18); color: #7aadff; }
+    [data-theme="dark"] .import-type-csv { background: rgba(142,36,170,0.2); color: #d090e8; }
+    /* ── Dark mode: all dark-red text elements → bright readable accent ── */
+    [data-theme="dark"] .back-btn { color: #ff9080; }
+    [data-theme="dark"] .back-btn:hover { color: #ffb4a8; }
+    [data-theme="dark"] .section-title { color: #ff9080; filter: none; }
+    [data-theme="dark"] .help-section h4 { color: #ff9080; }
+    [data-theme="dark"] .settings-section h4 { color: #ff9080; }
+    [data-theme="dark"] .hero-placeholder-btn { color: #ff9080; background: #2a1a1a; border-color: #5a3030; }
+    [data-theme="dark"] .hero-placeholder-btn:hover { background: #3a2020; }
+    [data-theme="dark"] .ingredients-list li::before { color: #ff9080; }
+    [data-theme="dark"] .ing-row::before { color: #ff9080; }
+    [data-theme="dark"] .step-num { background: #cc4433; }
+    [data-theme="dark"] .add-item-btn:hover { border-color: #ff9080; color: #ff9080; }
+    [data-theme="dark"] .add-section-btn:hover { border-color: #ff9080; color: #ff9080; }
+    [data-theme="dark"] .cat-add-btn:hover { border-color: #ff9080; color: #ff9080; }
+    [data-theme="dark"] .del-btn:hover { color: #ff9080; }
+    [data-theme="dark"] .del-section-btn:hover { color: #ff9080; }
+    [data-theme="dark"] .cb-badge-default { background: rgba(255,220,100,0.18); color: #f0c060; }
+    [data-theme="dark"] .cb-badge-active  { background: rgba(60,160,80,0.2); color: #6ecf7e; }
 
-    header { background:var(--red); color:#fff; padding:1rem 2rem; display:flex; align-items:center; gap:2rem; flex-wrap:wrap; position:sticky; top:0; z-index:200; }
-    header h1 { font-size:1.5rem; white-space:nowrap; }
-    nav { display:flex; gap:0.4rem; }
-    .tab-btn { padding:0.45rem 1.1rem; border:2px solid rgba(255,255,255,0.5); border-radius:6px; background:transparent; color:#fff; font-size:0.9rem; font-weight:600; cursor:pointer; transition:background 0.15s; }
-    .tab-btn:hover { background:rgba(255,255,255,0.15); }
-    .tab-btn.active { background:#fff; color:var(--red); border-color:#fff; }
+    html { font-size: calc(16px * var(--font-scale)); }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
-    .page { max-width:860px; margin:0 auto; padding:1.5rem 1rem 3rem; }
+    header { background: var(--header-bg); color: #fff; position: sticky; top: 0; z-index: 200; }
+    .header-top { display: flex; align-items: center; gap: 0.35rem; padding: clamp(0.28rem,0.6vw,0.45rem) clamp(0.5rem,1.5vw,1rem); flex-wrap: wrap; }
+    .tab-btn { padding: clamp(0.28rem,0.7vw,0.42rem) clamp(0.45rem,1.3vw,0.95rem); border: 2px solid rgba(255,255,255,0.5); border-radius: 6px; background: transparent; color: #fff; font-size: clamp(0.7rem,1.4vw,0.88rem); font-weight: 600; cursor: pointer; transition: background 0.15s; white-space: nowrap; }
+    .tab-btn:hover { background: rgba(255,255,255,0.15); }
+    .tab-btn.active { background: #fff; color: var(--red); border-color: #fff; }
+
+    .menubar { display: flex; gap: 0.25rem; margin-left: auto; align-items: center; }
+    .menu-trigger { background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.3); color: #fff; border-radius: 5px; padding: clamp(0.22rem,0.5vw,0.32rem) clamp(0.4rem,1vw,0.65rem); cursor: pointer; font-size: clamp(0.7rem,1.3vw,0.85rem); font-family: inherit; font-weight: 600; transition: background 0.15s; white-space: nowrap; }
+    .menu-trigger:hover { background: rgba(255,255,255,0.32); }
+    .nav-hist-btn { background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.25); color: #fff; border-radius: 5px; padding: clamp(0.2rem,0.45vw,0.3rem) clamp(0.35rem,0.8vw,0.55rem); cursor: pointer; font-size: clamp(0.75rem,1.4vw,0.95rem); font-family: inherit; font-weight: 700; transition: background 0.15s; line-height:1; }
+    .nav-hist-btn:hover:not(:disabled) { background: rgba(255,255,255,0.28); }
+    .nav-hist-btn:disabled { opacity: 0.38; cursor: default; }
+    .nav-divider { width: 1px; height: 1.4em; background: rgba(255,255,255,0.3); flex-shrink: 0; }
+    .menu-wrap { position: relative; }
+    .menu-dropdown { position: absolute; top: calc(100% + 5px); left: 0; background: #fff; border-radius: 9px; box-shadow: 0 6px 24px rgba(0,0,0,0.18); min-width: 210px; z-index: 600; overflow: hidden; }
+    .menu-dropdown button { width: 100%; text-align: left; padding: 0.55rem 1rem; border: none; background: none; cursor: pointer; font-size: 0.88rem; color: var(--text); transition: background 0.1s; white-space: nowrap; font-family: inherit; }
+    .menu-dropdown button:hover { background: #f5f0ee; }
+    .menu-sep { border: none; border-top: 1px solid var(--border); margin: 0.2rem 0; }
+    .menu-recent-label { padding: 0.25rem 1rem; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); }
+    .cookbook-label { font-size: clamp(0.65rem,1.2vw,0.78rem); opacity: 0.75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: clamp(80px,15vw,180px); }
+
+    .settings-section { margin: 1.2rem 0; }
+    .settings-section h4 { font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; color: var(--red); margin-bottom: 0.7rem; }
+    .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.45rem 0; border-bottom: 1px solid var(--border); }
+    .settings-row:last-child { border-bottom: none; }
+    .settings-row label { font-size: 0.9rem; color: var(--text); font-weight: 500; }
+    .settings-row input[type=checkbox] { width: 18px; height: 18px; cursor: pointer; accent-color: var(--red); }
+    .settings-row input[type=number] { width: 70px; padding: 0.35rem 0.5rem; border: 2px solid var(--border); border-radius: 6px; font-size: 0.95rem; text-align: center; outline: none; background: var(--card); color: var(--text); }
+    .settings-row input[type=text] { width: 180px; padding: 0.35rem 0.6rem; border: 2px solid var(--border); border-radius: 6px; font-size: 0.9rem; outline: none; background: var(--card); color: var(--text); }
+    .settings-row select { padding: 0.35rem 0.6rem; border: 2px solid var(--border); border-radius: 6px; font-size: 0.9rem; outline: none; background: var(--card); color: var(--text); font-family: inherit; cursor: pointer; }
+    .settings-row input:focus, .settings-row select:focus { border-color: var(--red); }
+    .settings-path { font-size: 0.75rem; color: var(--muted); margin-top: 0.5rem; word-break: break-all; padding: 0.4rem 0.6rem; background: var(--bg); border-radius: 5px; }
+
+    .help-section { margin: 1rem 0; }
+    .help-section h4 { font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; color: var(--red); margin-bottom: 0.5rem; }
+    .help-section p, .help-section li { font-size: 0.9rem; color: var(--text); line-height: 1.6; }
+    .help-section ul { padding-left: 1.2rem; }
+    .help-section li { margin-bottom: 0.3rem; }
+    .shortcut-row { display: flex; justify-content: space-between; padding: 0.3rem 0; border-bottom: 1px solid var(--border); font-size: 0.87rem; }
+    .shortcut-row:last-child { border-bottom: none; }
+    kbd { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 0.1rem 0.4rem; font-size: 0.8rem; font-family: monospace; }
+    .about-box { background: var(--bg); border-radius: 8px; padding: 1rem; text-align: center; margin-bottom: 1rem; }
+    .about-box .about-icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+    .about-box h3 { font-size: 1.2rem; margin-bottom: 0.3rem; }
+    .about-box p { font-size: 0.85rem; color: var(--muted); }
+
+    .recipe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(140px,18vw,195px),1fr)); gap: clamp(0.5rem,1.5vw,1rem); }
+    /* ── List-view alternative ─────────────────────────────────── */
+    .list-view { display: flex; flex-direction: column; gap: 0.35rem; }
+    .list-card { display: flex; align-items: center; gap: 0.75rem; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.75rem; cursor: pointer; transition: background 0.12s, box-shadow 0.12s; position: relative; }
+    .list-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,0.1); background: var(--border); }
+    .list-thumb { width: 46px; height: 46px; object-fit: cover; border-radius: 6px; flex-shrink: 0; }
+    .list-thumb-ph { width: 46px; height: 46px; border-radius: 6px; background: #f0e9e9; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; flex-shrink: 0; }
+    [data-theme="dark"] .list-thumb-ph { background: #2a2a3a; }
+    .list-info { flex: 1; min-width: 0; }
+    .list-title { font-weight: 700; font-size: 0.92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .list-meta  { font-size: 0.75rem; color: var(--muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .list-del { opacity: 0; background: rgba(0,0,0,0.55); color: #fff; border: none; border-radius: 50%; width: 24px; height: 24px; font-size: 0.72rem; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: opacity 0.15s, background 0.15s; flex-shrink: 0; }
+    .list-card:hover .list-del { opacity: 1; }
+    .list-del:hover { background: var(--red) !important; }
+    /* ── Scrollable inner lists (meal/group-meal detail) ────────── */
+    .detail-scroll-list { max-height: 420px; overflow-y: auto; padding-right: 2px; }
+    .grid-card img { width: 100%; height: clamp(100px,12vw,150px); object-fit: cover; display: block; }
+    .grid-card-img-placeholder { width: 100%; height: clamp(100px,12vw,150px); background: #f0e9e9; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; }
+    .page { max-width: 860px; margin: 0 auto; padding: clamp(0.8rem,2vw,1.5rem) clamp(0.6rem,2vw,1rem) 3rem; }
+    .card-body { padding: clamp(1rem,2.5vw,1.6rem) clamp(1rem,3vw,2rem); }
+
     #tab-saved { max-width:none; padding-left:1.5rem; padding-right:1.5rem; }
     #saved-detail-view { max-width:860px; margin:0 auto; }
 
     .search-bar { display:flex; gap:0.5rem; margin-bottom:1rem; }
-    .search-bar input { flex:1; padding:0.75rem 1rem; border:2px solid var(--border); border-radius:8px; font-size:1rem; outline:none; transition:border-color 0.2s; }
+    .search-bar input { flex:1; padding:0.75rem 1rem; border:2px solid var(--border); border-radius:8px; font-size:1rem; outline:none; transition:border-color 0.2s; background: var(--card); color: var(--text); }
     .search-bar input:focus { border-color:var(--red); }
     .search-bar button { padding:0.75rem 1.4rem; background:var(--red); color:#fff; border:none; border-radius:8px; font-size:1rem; font-weight:600; cursor:pointer; white-space:nowrap; transition:background 0.2s; }
     .search-bar button:hover { background:var(--red-dark); }
@@ -34,7 +160,6 @@
 
     .recipe-card { background:var(--card); border-radius:12px; box-shadow:0 2px 16px rgba(0,0,0,0.08); overflow:hidden; }
     .recipe-card img.hero { width:100%; max-height:300px; object-fit:cover; display:block; }
-    .card-body { padding:1.6rem 2rem; }
 
     .site-badge { display:inline-block; background:#f0e9e9; color:var(--red); border-radius:20px; padding:0.18rem 0.7rem; font-size:0.78rem; font-weight:600; margin-bottom:0.6rem; max-width:100%; word-break:break-all; }
 
@@ -43,11 +168,15 @@
 
     .serving-scaler { display:flex; align-items:center; gap:0.5rem; }
     .serving-scaler label { font-size:0.9rem; color:var(--muted); }
-    .serving-scaler input[type=number] { width:60px; padding:0.25rem 0.4rem; border:2px solid var(--border); border-radius:6px; font-size:1rem; font-weight:700; text-align:center; outline:none; transition:border-color 0.2s; }
+    .serving-scaler input[type=number] { width:60px; padding:0.25rem 0.4rem; border:2px solid var(--border); border-radius:6px; font-size:1rem; font-weight:700; text-align:center; outline:none; transition:border-color 0.2s; background: var(--card); color: var(--text); }
     .serving-scaler input[type=number]:focus { border-color:var(--red); }
     .scaled-badge { font-size:0.75rem; background:#fff3cd; color:#856404; border-radius:10px; padding:0.1rem 0.5rem; font-weight:600; }
     .make-default-btn { font-size:0.75rem; background:none; border:1.5px solid #aaa; border-radius:10px; color:#555; padding:0.1rem 0.55rem; font-weight:600; cursor:pointer; transition:border-color 0.15s,color 0.15s; white-space:nowrap; }
     .make-default-btn:hover { border-color:var(--red); color:var(--red); }
+
+    .recipe-toolbar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.5rem; padding:0.6rem 0.8rem; background:var(--bg); border-radius:8px; margin-bottom:0.9rem; border:1px solid var(--border); }
+    .recipe-toolbar-left { display:flex; align-items:center; gap:0.5rem; }
+    .recipe-toolbar-right { display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap; }
 
     .section-title { font-size:0.82rem; font-weight:800; letter-spacing:1px; text-transform:uppercase; color:var(--red); margin:1.4rem 0 0.7rem; }
 
@@ -62,6 +191,9 @@
     .steps-list { list-style:none; display:grid; gap:0.9rem; }
     .steps-list li { display:flex; gap:0.8rem; font-size:0.96rem; line-height:1.55; align-items:flex-start; }
     .step-num { background:var(--red); color:#fff; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:0.75rem; font-weight:700; flex-shrink:0; margin-top:2px; }
+
+    /* Read-only card title (scrape view) */
+    .card-title { font-size:1.6rem; font-weight:700; margin-bottom:1rem; line-height:1.2; color:var(--text); }
 
     /* Inline editing */
     .editable-title { font-size:1.6rem; font-weight:700; margin-bottom:1rem; line-height:1.2; cursor:pointer; border-radius:4px; padding:2px 4px; margin-left:-4px; transition:background 0.15s; }
@@ -113,14 +245,11 @@
     .btn-danger:hover { background:#fbd5d1; }
     .btn-success { background:#d4edda; color:#155724; }
 
-    .recipe-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:1rem; }
     .grid-card { background:var(--card); border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.07); overflow:hidden; cursor:pointer; transition:transform 0.15s,box-shadow 0.15s; position:relative; }
     .grid-card:hover { transform:translateY(-3px); box-shadow:0 6px 20px rgba(0,0,0,0.12); }
     .grid-card-del { position:absolute; top:6px; right:6px; background:rgba(0,0,0,0.55); color:#fff; border:none; border-radius:50%; width:26px; height:26px; font-size:0.75rem; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity 0.15s,background 0.15s; }
     .grid-card:hover .grid-card-del { opacity:1; }
     .grid-card-del:hover { background:var(--red) !important; }
-    .grid-card img { width:100%; height:150px; object-fit:cover; display:block; }
-    .grid-card-img-placeholder { width:100%; height:150px; background:#f0e9e9; display:flex; align-items:center; justify-content:center; font-size:2.5rem; }
     .grid-card-body { padding:0.8rem; }
     .grid-card-title { font-weight:700; font-size:0.95rem; line-height:1.3; margin-bottom:0.3rem; }
     .grid-card-meta { font-size:0.78rem; color:var(--muted); }
@@ -129,10 +258,45 @@
     .empty-state .big-icon { font-size:3rem; margin-bottom:1rem; }
 
     /* Sort/filter bar */
-    .grid-controls { display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem; align-items:center; }
-    .grid-controls select { padding:0.45rem 0.7rem; border:2px solid var(--border); border-radius:7px; font-size:0.88rem; font-family:inherit; background:#fff; color:var(--text); cursor:pointer; outline:none; }
+    .grid-controls { display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem; align-items:center; justify-content:space-between; }
+    .grid-controls-left { display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; flex:1; min-width:0; }
+    .grid-controls-right { display:flex; gap:0.5rem; align-items:center; flex-shrink:0; }
+    .grid-search-input { padding:0.45rem 0.75rem; border:2px solid var(--border); border-radius:7px; font-size:0.88rem; font-family:inherit; background:var(--card); color:var(--text); outline:none; min-width:160px; flex:1; transition:border-color 0.2s; }
+    .grid-search-input:focus { border-color:var(--red); }
+    .grid-controls select { padding:0.45rem 0.7rem; border:2px solid var(--border); border-radius:7px; font-size:0.88rem; font-family:inherit; background:var(--card); color:var(--text); cursor:pointer; outline:none; }
     .grid-controls select:focus { border-color:var(--red); }
     .grid-controls label { font-size:0.85rem; color:var(--muted); font-weight:600; }
+    .cat-tags { display:flex; flex-wrap:wrap; gap:0.3rem; align-items:center; }
+    .cat-tag { display:inline-flex; align-items:center; gap:0.25rem; background:#f0e9e9; color:var(--red); border-radius:20px; padding:0.15rem 0.6rem; font-size:0.75rem; font-weight:700; }
+    [data-theme="dark"] .cat-suggest-item:hover, [data-theme="dark"] .cat-suggest-item.active { background: #3a2020; color: #ffaaaa; }
+    .cat-tag-del { background:none; border:none; color:inherit; cursor:pointer; padding:0 0 0 2px; font-size:0.75rem; line-height:1; opacity:0.6; transition:opacity 0.15s; }
+    .cat-tag-del:hover { opacity:1; }
+    .cat-add-btn { display:inline-flex; align-items:center; background:none; border:1.5px dashed var(--border); border-radius:20px; padding:0.12rem 0.55rem; font-size:0.75rem; color:var(--muted); cursor:pointer; transition:border-color 0.15s,color 0.15s; }
+    .cat-add-btn:hover { border-color:var(--red); color:var(--red); }
+    .cat-tag-input { font-family:inherit; font-size:0.78rem; border:1.5px solid var(--red); border-radius:8px 8px 0 0; padding:0.18rem 0.55rem; outline:none; background:var(--card); color:var(--text); width:130px; }
+    .cat-tag-input.no-suggest { border-radius:8px; }
+    .cat-suggest-list { position:absolute; top:100%; left:0; min-width:160px; background:var(--card); border:1.5px solid var(--red); border-top:none; border-radius:0 0 8px 8px; box-shadow:0 4px 16px rgba(0,0,0,0.15); z-index:9999; max-height:180px; overflow-y:auto; }
+    .cat-suggest-item { padding:0.38rem 0.75rem; font-size:0.82rem; cursor:pointer; color:var(--text); transition:background 0.1s; white-space:nowrap; }
+    .cat-suggest-item:hover, .cat-suggest-item.active { background:#f0e9e9; color:var(--red); }
+    [data-theme="dark"] .cat-suggest-item:hover, [data-theme="dark"] .cat-suggest-item.active { background:#3a1010; }
+    .cat-suggest-wrap { position:relative; display:inline-block; }
+    /* Help modal */
+    .help-layout { display:flex; gap:0; min-height:340px; }
+    .help-sidebar { width:170px; flex-shrink:0; border-right:1px solid var(--border); padding:0.4rem 0; display:flex; flex-direction:column; gap:0.1rem; }
+    .help-sidebar-btn { background:none; border:none; text-align:left; padding:0.5rem 0.85rem; font-size:0.85rem; font-family:inherit; cursor:pointer; border-radius:6px; color:var(--text); transition:background 0.12s,color 0.12s; white-space:nowrap; }
+    .help-sidebar-btn:hover { background:var(--bg); }
+    .help-sidebar-btn.active { background:#f0e9e9; color:var(--red); font-weight:700; }
+    [data-theme="dark"] .help-sidebar-btn.active { background: rgba(255,144,128,0.15); color: #ff9080; }
+    [data-theme="dark"] .help-sidebar-btn:hover { background: rgba(255,255,255,0.07); }
+    [data-theme="dark"] .help-content h4 { color: #ff9080; }
+    [data-theme="dark"] .help-tip { border-left-color: #ff9080; }
+    .help-content { flex:1; padding:0 0 0 1.2rem; overflow-y:auto; max-height:420px; }
+    .help-content h3 { font-size:1.05rem; font-weight:800; margin:0 0 0.6rem; color:var(--text); }
+    .help-content h4 { font-size:0.78rem; font-weight:800; text-transform:uppercase; letter-spacing:0.7px; color:var(--red); margin:1rem 0 0.35rem; }
+    .help-content p { font-size:0.88rem; color:var(--text); line-height:1.65; margin:0 0 0.5rem; }
+    .help-content ul { padding-left:1.1rem; margin:0 0 0.6rem; }
+    .help-content li { font-size:0.88rem; color:var(--text); line-height:1.6; margin-bottom:0.25rem; }
+    .help-tip { background:var(--bg); border-left:3px solid var(--red); border-radius:0 6px 6px 0; padding:0.5rem 0.8rem; margin:0.7rem 0; font-size:0.83rem; color:var(--text); line-height:1.55; }
 
     /* Category badge on grid cards */
     .grid-cat-badge { display:inline-block; background:#f0e9e9; color:var(--red); border-radius:10px; padding:0.1rem 0.5rem; font-size:0.72rem; font-weight:700; margin-top:0.25rem; }
@@ -142,6 +306,22 @@
     #meals-detail-view { max-width:860px; margin:0 auto; }
     .meal-recipe-row { display:flex; align-items:center; gap:0.8rem; padding:0.6rem 0; border-bottom:1px solid var(--border); }
     .meal-recipe-row:last-child { border-bottom:none; }
+    /* Group meal expandable recipe rows */
+    .gm-meal-block { border:1px solid var(--border); border-radius:8px; margin-bottom:0.55rem; overflow:hidden; }
+    .gm-meal-block:last-child { margin-bottom:0; }
+    .gm-meal-header { display:flex; align-items:center; gap:0.6rem; padding:0.55rem 0.8rem; background:var(--bg); cursor:pointer; user-select:none; }
+    .gm-meal-header:hover { background:var(--border); }
+    .gm-meal-chevron { font-size:0.72rem; color:var(--muted); transition:transform 0.18s; flex-shrink:0; }
+    .gm-meal-header.open .gm-meal-chevron { transform:rotate(90deg); }
+    .gm-meal-name { font-weight:700; font-size:0.92rem; flex:1; }
+    .gm-meal-meta  { font-size:0.78rem; color:var(--muted); white-space:nowrap; }
+    .gm-recipe-list { display:none; border-top:1px solid var(--border); background:var(--card); }
+    .gm-recipe-list.open { display:block; }
+    .gm-recipe-row { display:flex; align-items:center; gap:0.6rem; padding:0.45rem 0.9rem 0.45rem 1.4rem; border-bottom:1px solid var(--border); }
+    .gm-recipe-row:last-child { border-bottom:none; }
+    .gm-recipe-name { flex:1; font-size:0.85rem; }
+    .gm-srv-label { font-size:0.75rem; color:var(--muted); white-space:nowrap; }
+    .gm-srv-input { width:130px; padding:0.2rem 0.35rem; border:1px solid var(--border); border-radius:5px; background:var(--input-bg,var(--card)); color:var(--text); font-size:0.8rem; }
     .meal-recipe-thumb { width:52px; height:52px; object-fit:cover; border-radius:6px; flex-shrink:0; }
     .meal-recipe-thumb-placeholder { width:52px; height:52px; background:#f0e9e9; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:1.4rem; flex-shrink:0; }
     .meal-recipe-info { flex:1; min-width:0; }
@@ -149,13 +329,13 @@
     .meal-recipe-meta { font-size:0.78rem; color:var(--muted); }
     .meal-card-recipes { display:flex; flex-wrap:wrap; gap:0.25rem; margin-top:0.35rem; }
     .shop-browser { display:grid; grid-template-columns:repeat(auto-fill,minmax(155px,1fr)); gap:0.7rem; margin-top:0.8rem; max-height:420px; overflow-y:auto; padding-right:2px; }
-    .shop-browser-card { background:#fff; border:2px solid var(--border); border-radius:9px; overflow:hidden; cursor:pointer; transition:border-color 0.15s,box-shadow 0.15s; }
+    .shop-browser-card { background:var(--card); border:2px solid var(--border); border-radius:9px; overflow:hidden; cursor:pointer; transition:border-color 0.15s,box-shadow 0.15s; }
     .shop-browser-card:hover { border-color:var(--red); box-shadow:0 3px 12px rgba(0,0,0,0.1); }
     .meal-badge { display:inline-block; background:#e8f0fe; color:#1a56db; border-radius:8px; padding:0.08rem 0.4rem; font-size:0.68rem; font-weight:800; }
     .shop-search-bar { display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; margin-bottom:0.7rem; }
-    .shop-search-bar input { flex:1; min-width:180px; padding:0.55rem 0.8rem; border:2px solid var(--border); border-radius:7px; font-size:0.9rem; outline:none; font-family:inherit; }
+    .shop-search-bar input { flex:1; min-width:180px; padding:0.55rem 0.8rem; border:2px solid var(--border); border-radius:7px; font-size:0.9rem; outline:none; font-family:inherit; background: var(--card); color: var(--text); }
     .shop-search-bar input:focus { border-color:var(--red); }
-    .shop-search-bar select { padding:0.55rem 0.7rem; border:2px solid var(--border); border-radius:7px; font-size:0.88rem; font-family:inherit; background:#fff; outline:none; }
+    .shop-search-bar select { padding:0.55rem 0.7rem; border:2px solid var(--border); border-radius:7px; font-size:0.88rem; font-family:inherit; background:var(--card); color:var(--text); outline:none; }
     .shop-search-bar select:focus { border-color:var(--red); }
 
     /* Hero image change overlay */
@@ -168,9 +348,9 @@
 
     /* Image change modal */
     .img-modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:500; display:flex; align-items:center; justify-content:center; }
-    .img-modal { background:#fff; border-radius:12px; padding:1.5rem; width:min(420px,90vw); box-shadow:0 8px 40px rgba(0,0,0,0.25); }
+    .img-modal { background:var(--card); border-radius:12px; padding:1.5rem; width:min(420px,90vw); box-shadow:0 8px 40px rgba(0,0,0,0.25); color:var(--text); }
     .img-modal h3 { font-size:1.05rem; margin-bottom:1rem; }
-    .img-modal input[type=text] { width:100%; padding:0.6rem 0.8rem; border:2px solid var(--border); border-radius:7px; font-size:0.9rem; outline:none; margin-bottom:0.6rem; }
+    .img-modal input[type=text] { width:100%; padding:0.6rem 0.8rem; border:2px solid var(--border); border-radius:7px; font-size:0.9rem; outline:none; margin-bottom:0.6rem; background:var(--card); color:var(--text); }
     .img-modal input[type=text]:focus { border-color:var(--red); }
     .img-modal input[type=file] { width:100%; margin-bottom:0.8rem; font-size:0.88rem; }
     .img-modal-btns { display:flex; gap:0.5rem; justify-content:flex-end; margin-top:0.5rem; }
@@ -187,28 +367,144 @@
     .shop-add-row { display:flex; gap:0.7rem; align-items:flex-end; flex-wrap:wrap; }
     .shop-field { display:flex; flex-direction:column; gap:0.3rem; }
     .shop-field label { font-size:0.82rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; }
-    .shop-field select { padding:0.6rem 0.8rem; border:2px solid var(--border); border-radius:8px; font-size:0.95rem; font-family:inherit; outline:none; min-width:220px; background:#fff; }
+    .shop-field select { padding:0.6rem 0.8rem; border:2px solid var(--border); border-radius:8px; font-size:0.95rem; font-family:inherit; outline:none; min-width:220px; background:var(--card); color:var(--text); }
     .shop-field select:focus { border-color:var(--red); }
-    .shop-field input[type=number] { width:80px; padding:0.6rem; border:2px solid var(--border); border-radius:8px; font-size:1rem; font-weight:700; text-align:center; outline:none; }
+    .shop-field input[type=number] { width:80px; padding:0.6rem; border:2px solid var(--border); border-radius:8px; font-size:1rem; font-weight:700; text-align:center; outline:none; background:var(--card); color:var(--text); }
     .shop-field input[type=number]:focus { border-color:var(--red); }
     .shop-entry { display:flex; align-items:center; justify-content:space-between; background:var(--card); border-radius:9px; box-shadow:0 1px 6px rgba(0,0,0,0.07); padding:0.75rem 1.1rem; margin-bottom:0.5rem; }
     .shop-entry-title { font-weight:700; font-size:0.97rem; margin-bottom:0.15rem; }
     .shop-entry-meta { font-size:0.8rem; color:var(--muted); }
     .shop-summary { font-size:0.85rem; color:var(--muted); margin:0.6rem 0 1.2rem; }
     .shop-empty { text-align:center; padding:3rem 1rem; color:var(--muted); }
+
+    /* Group meal browser rows */
+    .shop-recipe-row { display:flex; align-items:center; gap:0.6rem; padding:0.45rem 0.6rem; border:2px solid var(--border); border-radius:8px; cursor:pointer; transition:border-color 0.15s,box-shadow 0.15s,background 0.15s; background:var(--card); margin-bottom:0.35rem; }
+    .shop-recipe-row:hover { border-color:var(--red); box-shadow:0 2px 10px rgba(0,0,0,0.1); background:var(--bg); }
+    [data-theme="dark"] .shop-recipe-row:hover { border-color:#ff9080; }
+    .shop-recipe-thumb-placeholder { font-size:1.4rem; line-height:1; flex-shrink:0; }
+    .shop-recipe-info { flex:1; min-width:0; }
+    .shop-recipe-title { font-size:0.88rem; font-weight:700; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text); }
+    .shop-recipe-meta { font-size:0.75rem; color:var(--muted); margin-top:0.1rem; }
+
+    /* Custom prompt modal */
+    .prompt-modal-msg { font-size:0.97rem; color:var(--text); margin-bottom:0.9rem; font-weight:500; line-height:1.4; }
+    .prompt-modal-input { width:100%; padding:0.6rem 0.85rem; border:2px solid var(--border); border-radius:8px; font-size:1rem; font-family:inherit; background:var(--card); color:var(--text); outline:none; transition:border-color 0.2s; }
+    .prompt-modal-input:focus { border-color:var(--red); }
+    .confirm-modal-msg { font-size:0.97rem; color:var(--text); margin-bottom:1.1rem; font-weight:500; line-height:1.5; }
+
+    /* Color picker */
+    .color-picker-wrap { display:flex; align-items:center; gap:0.7rem; flex-wrap:wrap; }
+    input[type=color].accent-picker { width:38px; height:38px; padding:2px; border:2px solid var(--border); border-radius:8px; background:var(--card); cursor:pointer; }
+    input[type=color].accent-picker::-webkit-color-swatch-wrapper { padding:0; border-radius:5px; }
+    input[type=color].accent-picker::-webkit-color-swatch { border:none; border-radius:5px; }
+    .color-swatches { display:flex; gap:0.35rem; flex-wrap:wrap; }
+    .color-swatch { width:24px; height:24px; border-radius:50%; border:2px solid transparent; cursor:pointer; transition:transform 0.15s,border-color 0.15s; flex-shrink:0; }
+    .color-swatch:hover { transform:scale(1.25); }
+    .color-swatch.active { border-color:var(--text) !important; }
     .shop-empty .big-icon { font-size:3rem; margin-bottom:0.8rem; }
+
+    /* Cookbook tab */
+    #tab-cookbooks { max-width: none; padding-left: 1.5rem; padding-right: 1.5rem; }
+    .cookbook-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(160px,20vw,220px),1fr)); gap: clamp(0.7rem,1.5vw,1.1rem); }
+    .cookbook-card { background: var(--card); border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); padding: 1.3rem 1.2rem 1rem; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s; border: 2px solid transparent; position: relative; display: flex; flex-direction: column; gap: 0.4rem; }
+    .cookbook-card:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(0,0,0,0.13); }
+    .cookbook-card.active-cookbook { border-color: var(--red); }
+    .cookbook-card-icon { font-size: 2.2rem; line-height: 1; margin-bottom: 0.2rem; }
+    .cookbook-card-name { font-weight: 800; font-size: 1rem; line-height: 1.25; color: var(--text); word-break: break-word; }
+    .cookbook-card-meta { font-size: 0.8rem; color: var(--muted); }
+    .cookbook-card-badges { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.2rem; }
+    .cb-badge-default { background: #fff3cd; color: #856404; border-radius: 8px; padding: 0.1rem 0.5rem; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; }
+    .cb-badge-active  { background: #d4edda; color: #155724; border-radius: 8px; padding: 0.1rem 0.5rem; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; }
+    .cookbook-card-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 0.25rem; opacity: 0; transition: opacity 0.15s; }
+    .cookbook-card:hover .cookbook-card-actions { opacity: 1; }
+    .cb-action-btn { background: rgba(0,0,0,0.5); color: #fff; border: none; border-radius: 50%; width: 26px; height: 26px; font-size: 0.72rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.15s; }
+    .cb-action-btn:hover { background: var(--red); }
+    /* Import cookbook modal */
+    .import-type-badge { display:inline-block; padding:0.15rem 0.6rem; border-radius:8px; font-size:0.78rem; font-weight:800; text-transform:uppercase; }
+    .import-type-cookbook { background:#e8f0fe; color:#1a56db; }
+    .import-type-csv      { background:#fce8ff; color:#8e24aa; }
+    .import-preview-box { background:var(--bg); border-radius:8px; padding:0.85rem 1rem; margin:0.8rem 0 1rem; font-size:0.88rem; line-height:1.7; border:1px solid var(--border); }
+    .import-preview-box strong { color:var(--text); }
+
+    /* ── Custom title bar (pywebview frameless) ───────────────── */
+    #custom-titlebar {
+      position: fixed; top: 0; left: 0; right: 0;
+      height: 36px;
+      background: var(--header-bg);
+      display: flex; align-items: center;
+      z-index: 99999;
+      -webkit-app-region: drag;
+      user-select: none;
+      padding: 0 4px 0 10px;
+      gap: 8px;
+    }
+    .tb-logo { flex-shrink:0; display:flex; align-items:center; }
+    .tb-title { color:#fff; font-size:0.82rem; font-weight:700; letter-spacing:0.2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; }
+    .tb-controls { display:flex; align-items:stretch; height:36px; margin-left:auto; -webkit-app-region:no-drag; flex-shrink:0; }
+    .tb-btn { background:none; border:none; color:rgba(255,255,255,0.85); width:46px; height:36px; cursor:pointer; font-size:0.9rem; display:flex; align-items:center; justify-content:center; transition:background 0.12s; font-family:inherit; }
+    .tb-btn:hover { background:rgba(255,255,255,0.15); color:#fff; }
+    .tb-btn.tb-close:hover { background:#e81123; color:#fff; }
+
+    /* Push app content below the title bar */
+    body { padding-top: 36px; }
   </style>
 </head>
 <body>
 
+<!-- Custom title bar — only visible in the pywebview desktop app -->
+<div id="custom-titlebar">
+  <div class="tb-logo">
+    <svg width="22" height="22" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- Pan body -->
+      <circle cx="13" cy="18" r="10" fill="rgba(255,255,255,0.92)"/>
+      <!-- Pan rim/shine -->
+      <circle cx="13" cy="18" r="10" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="1.5"/>
+      <ellipse cx="10" cy="14" rx="3" ry="1.8" fill="rgba(255,255,255,0.35)"/>
+      <!-- Handle -->
+      <rect x="22" y="16" width="10" height="4" rx="2" fill="rgba(255,255,255,0.92)"/>
+      <!-- Handle grip -->
+      <rect x="24" y="17.5" width="6" height="1" rx="0.5" fill="rgba(0,0,0,0.15)"/>
+    </svg>
+  </div>
+  <span class="tb-title">Macleay Recipe Manager</span>
+  <div class="tb-controls">
+    <button class="tb-btn" title="Minimise" onclick="tbApi('minimize_window')">&#x2212;</button>
+    <button class="tb-btn" id="tb-max-btn" title="Maximise" onclick="tbApi('maximize_window')">&#x25A1;</button>
+    <button class="tb-btn tb-close" title="Close" onclick="tbApi('close_window')">&#x2715;</button>
+  </div>
+</div>
+
 <header>
-  <h1>Recipe Scraper</h1>
-  <nav>
+  <div class="header-top">
+    <!-- Back / Forward nav (far left) -->
+    <button class="nav-hist-btn" id="nav-back-btn" onclick="navBack()" disabled title="Go back">&#8592;</button>
+    <button class="nav-hist-btn" id="nav-fwd-btn"  onclick="navForward()" disabled title="Go forward">&#8594;</button>
+    <div class="nav-divider"></div>
+    <!-- Tab buttons inline -->
     <button class="tab-btn active" id="tab-scrape-btn" onclick="showTab('scrape')">Scrape Recipe</button>
     <button class="tab-btn" id="tab-saved-btn" onclick="showTab('saved')">My Recipes <span id="saved-count"></span></button>
     <button class="tab-btn" id="tab-shopping-btn" onclick="showTab('shopping')">Shopping List <span id="shopping-count"></span></button>
     <button class="tab-btn" id="tab-meals-btn" onclick="showTab('meals')">Meals <span id="meals-count"></span></button>
-  </nav>
+    <button class="tab-btn" id="tab-groupmeal-btn" onclick="showTab('groupmeal')">🍽️ Group Meal</button>
+    <button class="tab-btn" id="tab-cookbooks-btn" onclick="showTab('cookbooks')">📚 Cookbooks <span id="cookbooks-count"></span></button>
+    <!-- Menu controls pushed to the right -->
+    <div class="menubar">
+      <div class="menu-wrap" id="file-menu-wrap">
+        <button class="menu-trigger" onclick="toggleMenu('file')">File ▾</button>
+        <div class="menu-dropdown" id="file-menu" hidden>
+          <button onclick="menuAction(() => showTab('cookbooks'))">📚 Manage Cookbooks</button>
+          <button onclick="menuAction(createCookbook)">📄 New Cookbook</button>
+          <div class="menu-sep"></div>
+          <button onclick="menuAction(openCookbooksFolder)">📂 Open Cookbooks Folder</button>
+          <div class="menu-sep"></div>
+          <button onclick="menuAction(fileExit)">✕ Exit</button>
+        </div>
+      </div>
+      <button class="menu-trigger" onclick="showHelpPanel()">❓ Help</button>
+      <button class="menu-trigger" onclick="showSettingsPanel()">⚙ Settings</button>
+    </div>
+    <div class="cookbook-label" id="cookbook-name-display">My Cookbook</div>
+  </div>
 </header>
 
 <div id="tab-scrape" class="page">
@@ -223,20 +519,27 @@
 <div id="tab-saved" class="page" hidden>
   <div id="saved-list-view">
     <div class="grid-controls">
-      <button class="btn btn-primary" style="font-size:0.88rem;padding:0.45rem 1rem" onclick="openCreateRecipeModal()">+ Create Recipe</button>
-      <label>Sort:</label>
-      <select id="sort-select" onchange="applySort()">
-        <option value="newest">Newest</option>
-        <option value="oldest">Oldest</option>
-        <option value="az">A → Z</option>
-        <option value="za">Z → A</option>
-        <option value="category">By Category</option>
-        <option value="mostused">Most Used</option>
-      </select>
-      <label>Category:</label>
-      <select id="cat-filter" onchange="applySort()">
-        <option value="">All</option>
-      </select>
+      <div class="grid-controls-left">
+        <input class="grid-search-input" id="recipe-search-input" type="search"
+          placeholder="🔍 Search recipes…" oninput="applySort()" autocomplete="off">
+        <label>Sort:</label>
+        <select id="sort-select" onchange="applySort()">
+          <option value="newest">Newest</option>
+          <option value="oldest">Oldest</option>
+          <option value="az">A → Z</option>
+          <option value="za">Z → A</option>
+          <option value="category">By Category</option>
+          <option value="mostused">Most Used</option>
+        </select>
+        <label>Category:</label>
+        <select id="cat-filter" onchange="applySort()">
+          <option value="">All</option>
+        </select>
+      </div>
+      <div class="grid-controls-right">
+        <button class="btn btn-ghost" style="font-size:0.88rem;padding:0.45rem 1rem" onclick="openImportRecipesModal()">📥 Import</button>
+        <button class="btn btn-primary" style="font-size:0.88rem;padding:0.45rem 1rem" onclick="openCreateRecipeModal()">+ Create</button>
+      </div>
     </div>
     <div id="recipe-grid" class="recipe-grid"></div>
   </div>
@@ -247,6 +550,16 @@
 </div>
 
 <div id="tab-shopping" class="page" hidden>
+  <!-- Toolbar (hidden until list has items) -->
+  <div id="shopping-actions" class="recipe-toolbar" style="margin-bottom:1rem" hidden>
+    <div class="recipe-toolbar-left"></div>
+    <div class="recipe-toolbar-right">
+      <button class="btn btn-ghost" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="printShoppingList()">🖨 Print List</button>
+      <button class="btn btn-dark"  style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="exportShoppingPdf()">💾 Save PDF</button>
+      <button class="btn btn-danger" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="clearShoppingList()">🗑 Clear All</button>
+    </div>
+  </div>
+
   <div class="shop-add-card">
     <div class="section-title">Add to Shopping List</div>
     <div class="shop-search-bar">
@@ -263,11 +576,6 @@
   </div>
 
   <div id="shopping-list-content"></div>
-
-  <div id="shopping-actions" class="btn-row" hidden>
-    <button class="btn btn-dark" onclick="printShoppingList()">Print Shopping List</button>
-    <button class="btn btn-danger" onclick="clearShoppingList()">Clear All</button>
-  </div>
 </div>
 
 <div id="tab-meals" class="page" hidden>
@@ -280,6 +588,66 @@
   <div id="meals-detail-view" hidden>
     <button class="back-btn" onclick="backToMealsList()">← Back to Meals</button>
     <div id="meals-detail-content"></div>
+  </div>
+</div>
+
+<div id="tab-groupmeal" class="page" hidden>
+  <div id="groupmeal-list-view">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:1rem">
+      <button class="btn btn-primary" onclick="createGroupMeal()">+ New Group Meal</button>
+    </div>
+    <div id="groupmeal-grid" class="recipe-grid"></div>
+  </div>
+  <div id="groupmeal-detail-view" hidden>
+    <button class="back-btn" onclick="backToGroupMealList()">← Back to Group Meals</button>
+    <div id="groupmeal-detail-content"></div>
+  </div>
+</div>
+
+<div id="tab-cookbooks" class="page" hidden>
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.7rem;margin-bottom:1.2rem">
+    <div>
+      <h2 style="font-size:1.2rem;font-weight:800;margin-bottom:0.2rem">My Cookbooks</h2>
+      <p style="font-size:0.85rem;color:var(--muted)">Each cookbook is a separate collection of recipes. Click one to switch to it.</p>
+    </div>
+    <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+      <button class="btn btn-ghost" onclick="importCookbook()">📥 Import Cookbook</button>
+      <button class="btn btn-primary" onclick="createCookbook()">+ New Cookbook</button>
+    </div>
+  </div>
+  <div id="cookbook-grid" class="cookbook-grid"></div>
+</div>
+
+<!-- Import Cookbook Modal -->
+<div id="import-modal-backdrop" class="img-modal-backdrop" hidden onclick="closeImportModal(event)">
+  <div class="img-modal" style="width:min(460px,95vw)" onclick="event.stopPropagation()">
+    <h3>📥 Import Cookbook</h3>
+
+    <!-- Step 1: file chooser (always visible until a file is picked) -->
+    <div id="import-choose-step">
+      <p style="font-size:0.88rem;color:var(--muted);margin-bottom:0.9rem">
+        Supports Macleay Recipe Manager <strong>.cookbook</strong> files and AccuChef <strong>.csv</strong> exports.
+      </p>
+      <!-- The label wraps the real file input — clicking the label IS a user gesture -->
+      <label style="display:block;cursor:pointer">
+        <span class="btn btn-primary" style="display:inline-block;width:100%;text-align:center;box-sizing:border-box"
+              onclick="browseImportFile(event)">📂 Browse for File…</span>
+        <input type="file" id="import-file-input" accept=".cookbook,.rwz,.RWZ"
+               style="display:none" onchange="handleImportFileSelect(this)" accept=".cookbook,.csv">
+      </label>
+    </div>
+
+    <!-- Step 2: preview + name (shown after file is chosen) -->
+    <div id="import-preview-box" class="import-preview-box" hidden></div>
+    <div id="import-name-wrap" hidden style="margin-top:0.6rem">
+      <label style="font-size:0.8rem;font-weight:700;color:var(--muted);display:block;margin-bottom:0.3rem;text-transform:uppercase;letter-spacing:0.5px">Save as cookbook name</label>
+      <input type="text" id="import-name-input" class="prompt-modal-input" placeholder="My Imported Cookbook" style="margin-bottom:0" />
+    </div>
+    <div id="import-status" style="font-size:0.85rem;color:var(--muted);margin-top:0.6rem;min-height:1.2rem"></div>
+    <div class="img-modal-btns" style="margin-top:1rem">
+      <button class="btn btn-ghost" onclick="closeImportModal()">Cancel</button>
+      <button class="btn btn-primary" id="import-confirm-btn" hidden onclick="confirmImport()">Import</button>
+    </div>
   </div>
 </div>
 
@@ -297,8 +665,8 @@
           <input type="text" id="cr-servings" placeholder="e.g. 4 servings" style="width:100%;padding:0.55rem 0.7rem;border:2px solid var(--border);border-radius:7px;font-size:0.95rem;outline:none;font-family:inherit"/>
         </div>
         <div style="flex:1;min-width:130px">
-          <label style="font-size:0.8rem;font-weight:700;color:var(--muted);display:block;margin-bottom:0.3rem;text-transform:uppercase;letter-spacing:0.5px">Category</label>
-          <input type="text" id="cr-category" placeholder="e.g. Dinner" style="width:100%;padding:0.55rem 0.7rem;border:2px solid var(--border);border-radius:7px;font-size:0.95rem;outline:none;font-family:inherit"/>
+          <label style="font-size:0.8rem;font-weight:700;color:var(--muted);display:block;margin-bottom:0.3rem;text-transform:uppercase;letter-spacing:0.5px">Categories <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:0.75rem">(up to 5, comma-separated)</span></label>
+          <input type="text" id="cr-category" placeholder="e.g. Dinner, Italian, Quick" style="width:100%;padding:0.55rem 0.7rem;border:2px solid var(--border);border-radius:7px;font-size:0.95rem;outline:none;font-family:inherit"/>
         </div>
       </div>
       <div>
@@ -309,14 +677,63 @@
         <label style="font-size:0.8rem;font-weight:700;color:var(--muted);display:block;margin-bottom:0.3rem;text-transform:uppercase;letter-spacing:0.5px">Instructions — one step per line</label>
         <textarea id="cr-instructions" placeholder="Preheat oven to 350°F&#10;Mix dry ingredients in a bowl&#10;Add wet ingredients and stir until combined" style="width:100%;padding:0.6rem 0.8rem;border:2px solid var(--border);border-radius:7px;font-size:0.9rem;font-family:inherit;outline:none;resize:vertical;min-height:120px;line-height:1.6"></textarea>
       </div>
-      <div>
-        <label style="font-size:0.8rem;font-weight:700;color:var(--muted);display:block;margin-bottom:0.3rem;text-transform:uppercase;letter-spacing:0.5px">Image URL (optional)</label>
-        <input type="text" id="cr-image" placeholder="https://example.com/photo.jpg" style="width:100%;padding:0.55rem 0.7rem;border:2px solid var(--border);border-radius:7px;font-size:0.9rem;outline:none;font-family:inherit"/>
+      <div style="display:flex;gap:0.6rem;flex-wrap:wrap">
+        <div style="flex:1;min-width:180px">
+          <label style="font-size:0.8rem;font-weight:700;color:var(--muted);display:block;margin-bottom:0.3rem;text-transform:uppercase;letter-spacing:0.5px">Website Link <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
+          <input type="url" id="cr-source-url" placeholder="https://example.com/recipe" style="width:100%;padding:0.55rem 0.7rem;border:2px solid var(--border);border-radius:7px;font-size:0.9rem;outline:none;font-family:inherit"/>
+        </div>
+        <div style="flex:1;min-width:180px">
+          <label style="font-size:0.8rem;font-weight:700;color:var(--muted);display:block;margin-bottom:0.3rem;text-transform:uppercase;letter-spacing:0.5px">Image URL <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
+          <input type="text" id="cr-image" placeholder="https://example.com/photo.jpg" style="width:100%;padding:0.55rem 0.7rem;border:2px solid var(--border);border-radius:7px;font-size:0.9rem;outline:none;font-family:inherit"/>
+        </div>
       </div>
     </div>
     <div class="img-modal-btns" style="margin-top:1.2rem">
       <button class="btn btn-ghost" onclick="closeCreateRecipeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="submitCreateRecipe()">Create Recipe</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import Recipes Modal -->
+<div id="import-recipes-modal-backdrop" class="img-modal-backdrop" hidden onclick="closeImportRecipesModal(event)">
+  <div class="img-modal" style="width:min(540px,95vw);max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()">
+    <h3>📥 Import Recipes</h3>
+    <p style="font-size:0.88rem;color:var(--muted);margin:0.4rem 0 1rem">Add recipes to your current cookbook from a file. All imported recipes go straight into <strong id="ir-cookbook-name">My Cookbook</strong>.</p>
+
+    <!-- Format explanations -->
+    <div style="display:flex;flex-direction:column;gap:0.55rem;margin-bottom:1.2rem">
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:0.7rem 0.9rem">
+        <div style="font-weight:700;font-size:0.88rem;margin-bottom:0.2rem">📄 Text File <span style="font-size:0.75rem;color:var(--muted);font-weight:400">(.txt)</span></div>
+        <div style="font-size:0.82rem;color:var(--muted);line-height:1.5">A single recipe written in plain text. The first line becomes the title. Label your sections with <strong>Ingredients:</strong> and <strong>Instructions:</strong> (one item per line). You can also add <strong>Servings:</strong>, <strong>Category:</strong>, and <strong>Time:</strong> lines.</div>
+      </div>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:0.7rem 0.9rem">
+        <div style="font-weight:700;font-size:0.88rem;margin-bottom:0.2rem">📚 Cookbook File <span style="font-size:0.75rem;color:var(--muted);font-weight:400">(.cookbook)</span></div>
+        <div style="font-size:0.82rem;color:var(--muted);line-height:1.5">A Macleay Recipe Manager cookbook exported from this app or another copy. <strong>Every recipe</strong> in the cookbook will be imported into your current cookbook.</div>
+      </div>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:0.7rem 0.9rem">
+        <div style="font-weight:700;font-size:0.88rem;margin-bottom:0.2rem">📊 CSV Spreadsheet <span style="font-size:0.75rem;color:var(--muted);font-weight:400">(.csv)</span></div>
+        <div style="font-size:0.82rem;color:var(--muted);line-height:1.5">Supports two formats: <strong>Macleay Recipe Manager CSV</strong> (exported from this app — full fidelity, preserves photos and all fields) and <strong>AccuChef CSV</strong> (exported from AccuChef — imports title, category, servings, ingredients, and instructions). <strong>All recipes</strong> in the file will be imported.</div>
+      </div>
+    </div>
+
+    <!-- File picker -->
+    <div style="margin-bottom:0.9rem">
+      <label style="font-size:0.8rem;font-weight:700;color:var(--muted);display:block;margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:0.5px">Choose a file</label>
+      <label style="display:flex;align-items:center;gap:0.6rem;cursor:pointer">
+        <input type="file" id="ir-file-input" accept=".txt,.cookbook,.csv" style="display:none" onchange="handleIRFileSelect(this)">
+        <button class="btn btn-ghost" style="font-size:0.85rem;padding:0.45rem 1rem" onclick="document.getElementById('ir-file-input').click();event.preventDefault()">Browse…</button>
+        <span id="ir-file-name" style="font-size:0.85rem;color:var(--muted)">No file chosen</span>
+      </label>
+    </div>
+
+    <!-- Preview -->
+    <div id="ir-preview" hidden style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:0.75rem 1rem;margin-bottom:1rem;font-size:0.88rem;line-height:1.7"></div>
+    <div id="ir-status" style="font-size:0.85rem;min-height:1.2rem;margin-bottom:0.5rem"></div>
+
+    <div class="img-modal-btns">
+      <button class="btn btn-ghost" onclick="closeImportRecipesModal()">Cancel</button>
+      <button class="btn btn-primary" id="ir-import-btn" hidden onclick="confirmImportRecipes()">Import</button>
     </div>
   </div>
 </div>
@@ -352,10 +769,112 @@
   </div>
 </div>
 
+<!-- Custom Prompt Modal (replaces browser prompt()) -->
+<div id="prompt-modal-backdrop" class="img-modal-backdrop" hidden>
+  <div class="img-modal" onclick="event.stopPropagation()" style="width:min(420px,92vw)">
+    <p id="prompt-modal-msg" class="prompt-modal-msg"></p>
+    <input type="text" id="prompt-modal-input" class="prompt-modal-input" />
+    <div class="img-modal-btns" style="margin-top:1rem">
+      <button class="btn btn-ghost" onclick="resolvePrompt(null)">Cancel</button>
+      <button class="btn btn-primary" id="prompt-modal-ok" onclick="resolvePrompt(document.getElementById('prompt-modal-input').value)">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div id="settings-modal-backdrop" class="img-modal-backdrop" hidden onclick="closeSettingsPanel(event)">
+  <div class="img-modal" style="width:min(480px,95vw);max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()">
+    <h3>⚙ Settings</h3>
+
+    <div class="settings-section">
+      <h4>Appearance</h4>
+      <div class="settings-row">
+        <label>Dark Mode</label>
+        <input type="checkbox" id="setting-dark-mode" onchange="saveSetting('theme', this.checked ? 'dark' : 'light')">
+      </div>
+      <div class="settings-row">
+        <label>Font Size (px)</label>
+        <input type="number" id="setting-font-size" min="10" max="28" step="1" value="16"
+          style="width:70px" onchange="saveSetting('fontSize', +this.value)">
+      </div>
+      <div class="settings-row" style="flex-wrap:wrap;gap:0.5rem">
+        <label>Accent Color</label>
+        <div class="color-picker-wrap">
+          <input type="color" id="setting-accent-color" class="accent-picker" value="#c0392b"
+            oninput="saveSetting('accentColor', this.value); renderColorSwatches()">
+          <div class="color-swatches" id="color-swatches"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h4>View</h4>
+      <div class="settings-row">
+        <label>Layout for Recipes, Meals &amp; Groups</label>
+        <select id="setting-view-mode" onchange="saveSetting('viewMode', this.value)">
+          <option value="grid">Grid (Cards)</option>
+          <option value="list">List</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h4>Current Cookbook</h4>
+      <div class="settings-row">
+        <label>Active</label>
+        <span id="setting-active-cookbook" style="font-weight:700;color:var(--text)">—</span>
+      </div>
+    </div>
+
+    <div class="img-modal-btns" style="margin-top:1rem">
+      <button class="btn btn-ghost" onclick="closeSettingsPanel()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Help / About Modal -->
+<div id="help-modal-backdrop" class="img-modal-backdrop" hidden onclick="closeHelpPanel(event)">
+  <div class="img-modal" style="width:min(680px,96vw);max-height:92vh;display:flex;flex-direction:column" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.9rem;flex-shrink:0">
+      <div style="display:flex;align-items:center;gap:0.6rem">
+        <span style="font-size:1.4rem">❓</span>
+        <h3 style="margin:0">Help &amp; Guide</h3>
+      </div>
+      <button class="btn btn-ghost" style="padding:0.3rem 0.8rem;font-size:0.85rem" onclick="closeHelpPanel()">Close</button>
+    </div>
+    <div class="help-layout" style="flex:1;overflow:hidden">
+      <div class="help-sidebar" id="help-sidebar"></div>
+      <div class="help-content" id="help-content"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Modal -->
+<div id="confirm-modal-backdrop" class="img-modal-backdrop" hidden onclick="closeConfirm(event)">
+  <div class="prompt-modal" onclick="event.stopPropagation()">
+    <div class="confirm-modal-msg" id="confirm-modal-msg">Are you sure?</div>
+    <div class="img-modal-btns" style="margin-top:0">
+      <button class="btn btn-ghost" onclick="resolveConfirm(false)">Cancel</button>
+      <button class="btn btn-danger" id="confirm-modal-ok" onclick="resolveConfirm(true)">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Alert Modal -->
+<div id="alert-modal-backdrop" class="img-modal-backdrop" hidden onclick="document.getElementById('alert-modal-backdrop').hidden=true">
+  <div class="prompt-modal" onclick="event.stopPropagation()">
+    <div class="confirm-modal-msg" id="alert-modal-msg">Message</div>
+    <div class="img-modal-btns" style="margin-top:0">
+      <button class="btn btn-primary" onclick="document.getElementById('alert-modal-backdrop').hidden=true">OK</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ══════════════════════════════════════════════════════════════
 // State
 // ══════════════════════════════════════════════════════════════
+let appSettings = {};
 let currentScrape = null;
 let savedRecipes = [];
 let selectedRecipe = null;
@@ -369,8 +888,51 @@ let shopAddTarget = null;
 // ══════════════════════════════════════════════════════════════
 // Tabs
 // ══════════════════════════════════════════════════════════════
+// ── Page navigation history ────────────────────────────────────
+let _navHistory = ["scrape"];
+let _navIdx     = 0;
+let _navSkip    = false; // true when navigating via back/fwd (don't push)
+
+const _navPageNames = {
+  scrape:    "Scrape Recipe",
+  saved:     "My Recipes",
+  shopping:  "Shopping List",
+  meals:     "Meals",
+  groupmeal: "Group Meal",
+  cookbooks: "Cookbooks",
+};
+
+function _navUpdateBtns() {
+  const backBtn = document.getElementById("nav-back-btn");
+  const fwdBtn  = document.getElementById("nav-fwd-btn");
+  backBtn.disabled = _navIdx <= 0;
+  fwdBtn.disabled  = _navIdx >= _navHistory.length - 1;
+  backBtn.title = _navIdx > 0
+    ? `Back to ${_navPageNames[_navHistory[_navIdx - 1]] || _navHistory[_navIdx - 1]}`
+    : "No previous page";
+  fwdBtn.title = _navIdx < _navHistory.length - 1
+    ? `Forward to ${_navPageNames[_navHistory[_navIdx + 1]] || _navHistory[_navIdx + 1]}`
+    : "No next page";
+}
+
+function navBack() {
+  if (_navIdx <= 0) return;
+  _navSkip = true;
+  showTab(_navHistory[--_navIdx]);
+  _navSkip = false;
+  _navUpdateBtns();
+}
+
+function navForward() {
+  if (_navIdx >= _navHistory.length - 1) return;
+  _navSkip = true;
+  showTab(_navHistory[++_navIdx]);
+  _navSkip = false;
+  _navUpdateBtns();
+}
+
 function showTab(tab) {
-  ["scrape","saved","shopping","meals"].forEach(t => {
+  ["scrape","saved","shopping","meals","groupmeal","cookbooks"].forEach(t => {
     document.getElementById(`tab-${t}`).hidden = tab !== t;
     document.getElementById(`tab-${t}-btn`).classList.toggle("active", tab === t);
   });
@@ -382,6 +944,19 @@ function showTab(tab) {
   }
   if (tab === "shopping") initShoppingTab();
   if (tab === "meals") initMealsTab();
+  if (tab === "groupmeal") initGroupMealTab();
+  if (tab === "cookbooks") initCookbooksTab();
+  // Push to history unless we're navigating back/forward
+  if (!_navSkip) {
+    // Truncate any forward history after current position
+    _navHistory = _navHistory.slice(0, _navIdx + 1);
+    // Only push if different from current
+    if (_navHistory[_navIdx] !== tab) {
+      _navHistory.push(tab);
+      _navIdx = _navHistory.length - 1;
+    }
+    _navUpdateBtns();
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -442,7 +1017,7 @@ async function loadSavedRecipes() {
 function updateCatFilter() {
   const sel = document.getElementById("cat-filter");
   if (!sel) return;
-  const cats = [...new Set(savedRecipes.map(r => r.category).filter(Boolean))].sort();
+  const cats = [...new Set(savedRecipes.flatMap(r => r.categories && r.categories.length ? r.categories : (r.category ? [r.category] : [])))].filter(Boolean).sort();
   const prev = sel.value;
   sel.innerHTML = `<option value="">All</option>` + cats.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
   sel.value = cats.includes(prev) ? prev : "";
@@ -458,9 +1033,19 @@ function applySort() {
 }
 
 function getSortedRecipes() {
+  const q = (document.getElementById("recipe-search-input")?.value || "").trim().toLowerCase();
+  const rCats = r => r.categories && r.categories.length ? r.categories : (r.category ? [r.category] : []);
   let list = currentCatFilter
-    ? savedRecipes.filter(r => r.category === currentCatFilter)
+    ? savedRecipes.filter(r => rCats(r).includes(currentCatFilter))
     : [...savedRecipes];
+  if (q) {
+    list = list.filter(r =>
+      (r.title || "").toLowerCase().includes(q) ||
+      rCats(r).join(" ").toLowerCase().includes(q) ||
+      (r.servings || "").toLowerCase().includes(q) ||
+      (r.site_name || "").toLowerCase().includes(q)
+    );
+  }
   switch (currentSort) {
     case "newest":   list.sort((a,b) => b.id - a.id); break;
     case "oldest":   list.sort((a,b) => a.id - b.id); break;
@@ -473,22 +1058,45 @@ function getSortedRecipes() {
 }
 
 function renderGrid() {
-  const grid = document.getElementById("recipe-grid");
+  const container = document.getElementById("recipe-grid");
   const list = getSortedRecipes();
   if (!list.length) {
-    grid.innerHTML = `<div class="empty-state"><div class="big-icon">📋</div><p>${savedRecipes.length ? "No recipes in this category." : "No saved recipes yet.<br>Scrape one and click Save!"}</p></div>`;
+    const q = (document.getElementById("recipe-search-input")?.value || "").trim();
+    const msg = q ? `No recipes match "<strong>${esc(q)}</strong>".`
+                 : savedRecipes.length ? "No recipes in this category."
+                 : "No saved recipes yet.<br>Scrape one or create one!";
+    container.className = "recipe-grid";
+    container.innerHTML = `<div class="empty-state"><div class="big-icon">📋</div><p>${msg}</p></div>`;
     return;
   }
-  grid.innerHTML = list.map(r => `
-    <div class="grid-card" onclick="openRecipe(${r.id})">
-      <button class="grid-card-del" onclick="deleteRecipeById(${r.id},event)" title="Delete">✕</button>
-      ${r.image ? `<img src="${esc(r.image)}" alt="${esc(r.title)}" loading="lazy"/>` : `<div class="grid-card-img-placeholder">🍽️</div>`}
-      <div class="grid-card-body">
-        <div class="grid-card-title">${esc(r.title)}</div>
-        ${r.category ? `<div><span class="grid-cat-badge">${esc(r.category)}</span></div>` : ""}
-        <div class="grid-card-meta">${esc(r.servings||"")}</div>
-      </div>
-    </div>`).join("");
+  const mode = appSettings.viewMode || "grid";
+  if (mode === "list") {
+    container.className = "list-view";
+    container.innerHTML = list.map(r => {
+      const cats = (r.categories && r.categories.length ? r.categories : (r.category ? [r.category] : []));
+      const meta = [r.servings, cats.join(", ")].filter(Boolean).join(" · ");
+      return `<div class="list-card" onclick="openRecipe(${r.id})">
+        ${r.image ? `<img class="list-thumb" src="${esc(r.image)}" loading="lazy"/>` : `<div class="list-thumb-ph">🍽️</div>`}
+        <div class="list-info">
+          <div class="list-title">${esc(r.title)}</div>
+          ${meta ? `<div class="list-meta">${esc(meta)}</div>` : ""}
+        </div>
+        <button class="list-del" onclick="deleteRecipeById(${r.id},event)" title="Delete">✕</button>
+      </div>`;
+    }).join("");
+  } else {
+    container.className = "recipe-grid";
+    container.innerHTML = list.map(r => `
+      <div class="grid-card" onclick="openRecipe(${r.id})">
+        <button class="grid-card-del" onclick="deleteRecipeById(${r.id},event)" title="Delete">✕</button>
+        ${r.image ? `<img src="${esc(r.image)}" alt="${esc(r.title)}" loading="lazy"/>` : `<div class="grid-card-img-placeholder">🍽️</div>`}
+        <div class="grid-card-body">
+          <div class="grid-card-title">${esc(r.title)}</div>
+          ${(r.categories && r.categories.length ? r.categories : (r.category ? [r.category] : [])).length ? `<div style="display:flex;flex-wrap:wrap;gap:0.2rem;margin-top:0.2rem">${(r.categories && r.categories.length ? r.categories : [r.category]).map(c=>`<span class="grid-cat-badge">${esc(c)}</span>`).join("")}</div>` : ""}
+          <div class="grid-card-meta">${esc(r.servings||"")}</div>
+        </div>
+      </div>`).join("");
+  }
 }
 
 function openRecipe(id) {
@@ -520,6 +1128,170 @@ async function patchRecipe() {
   const idx = savedRecipes.findIndex(r => r.id === selectedRecipe.id);
   if (idx !== -1) savedRecipes[idx] = {...selectedRecipe};
   updateCatFilter();
+  showToast();
+}
+
+// ── Category tag editor ───────────────────────────────────────
+function buildCategoryTagsHTML(ctx, cats) {
+  const tags = (cats || []).map((cat, i) => {
+    const delBtn = `<button class="cat-tag-del" onclick="removeCategory('${ctx}',${i})" title="Remove">×</button>`;
+    return `<span class="cat-tag">${esc(cat)}${delBtn}</span>`;
+  }).join("");
+  const addBtn = (cats || []).length < 5
+    ? `<button class="cat-add-btn" id="cat-add-${ctx}" onclick="addCategoryInput('${ctx}')">+ Add</button>`
+    : "";
+  return `<div class="cat-tags" id="cat-tags-${ctx}">${tags || '<span style="font-size:0.8rem;color:var(--muted)">No categories</span>'}${addBtn}</div>`;
+}
+
+function addCategoryInput(ctx) {
+  const btn = document.getElementById(`cat-add-${ctx}`);
+  if (!btn) return;
+
+  // Build the wrapper + input + suggestion list
+  const wrap = document.createElement("div");
+  wrap.className = "cat-suggest-wrap";
+
+  const inp = document.createElement("input");
+  inp.className = "cat-tag-input";
+  inp.placeholder = "Category…";
+
+  const list = document.createElement("div");
+  list.className = "cat-suggest-list";
+  list.style.display = "none";
+
+  wrap.appendChild(inp);
+  wrap.appendChild(list);
+  btn.replaceWith(wrap);
+  inp.focus();
+
+  // Gather all existing categories not already on this item
+  const currentCats = (ctx === "saved" && selectedRecipe)
+    ? (selectedRecipe.categories || (selectedRecipe.category ? [selectedRecipe.category] : []))
+    : (ctx === "meal" && selectedMeal)
+      ? (selectedMeal.categories || (selectedMeal.category ? [selectedMeal.category] : []))
+      : [];
+  const allCats = [...new Set(savedRecipes.flatMap(r => r.categories || (r.category ? [r.category] : [])))];
+  const available = allCats.filter(c => !currentCats.includes(c)).sort();
+
+  let activeIdx = -1;
+
+  function renderList(filter) {
+    const filtered = filter
+      ? available.filter(c => c.toLowerCase().includes(filter.toLowerCase()))
+      : available;
+    if (filtered.length === 0) { list.style.display = "none"; return; }
+    list.innerHTML = filtered.map((c, i) =>
+      `<div class="cat-suggest-item" data-val="${esc(c)}" data-i="${i}">${esc(c)}</div>`
+    ).join("");
+    list.style.display = "block";
+    activeIdx = -1;
+  }
+
+  function setActive(i) {
+    const items = list.querySelectorAll(".cat-suggest-item");
+    items.forEach(el => el.classList.remove("active"));
+    if (i >= 0 && i < items.length) {
+      items[i].classList.add("active");
+      items[i].scrollIntoView({ block: "nearest" });
+      activeIdx = i;
+    } else {
+      activeIdx = -1;
+    }
+  }
+
+  async function commitValue(val) {
+    val = val.trim();
+    list.style.display = "none";
+    if (val) {
+      if (ctx === "saved" && selectedRecipe) {
+        if (!selectedRecipe.categories) selectedRecipe.categories = selectedRecipe.category ? [selectedRecipe.category] : [];
+        if (selectedRecipe.categories.length < 5 && !selectedRecipe.categories.includes(val)) {
+          selectedRecipe.categories.push(val);
+          selectedRecipe.category = selectedRecipe.categories[0];
+          await patchRecipe();
+        }
+        renderSavedDetail();
+      } else if (ctx === "meal" && selectedMeal) {
+        if (!selectedMeal.categories) selectedMeal.categories = selectedMeal.category ? [selectedMeal.category] : [];
+        if (selectedMeal.categories.length < 5 && !selectedMeal.categories.includes(val)) {
+          selectedMeal.categories.push(val);
+          selectedMeal.category = selectedMeal.categories[0];
+          await patchMeal();
+        }
+        renderMealDetail();
+      }
+    } else {
+      if (ctx === "saved") renderSavedDetail();
+      else renderMealDetail();
+    }
+  }
+
+  inp.addEventListener("input", () => renderList(inp.value));
+  inp.addEventListener("focus", () => renderList(inp.value));
+
+  inp.addEventListener("keydown", e => {
+    const items = list.querySelectorAll(".cat-suggest-item");
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActive(Math.min(activeIdx + 1, items.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActive(Math.max(activeIdx - 1, -1));
+    } else if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      if (activeIdx >= 0 && items[activeIdx]) {
+        commitValue(items[activeIdx].dataset.val);
+      } else {
+        commitValue(inp.value);
+      }
+    } else if (e.key === "Escape") {
+      list.style.display = "none";
+      if (ctx === "saved") renderSavedDetail();
+      else renderMealDetail();
+    }
+  });
+
+  // mousedown fires before blur so we can capture the click
+  list.addEventListener("mousedown", e => {
+    const item = e.target.closest(".cat-suggest-item");
+    if (item) { e.preventDefault(); commitValue(item.dataset.val); }
+  });
+
+  inp.addEventListener("blur", () => {
+    // Short delay so mousedown on a list item fires first
+    setTimeout(() => {
+      if (list.style.display !== "none") commitValue(inp.value);
+    }, 150);
+  });
+
+  // Show suggestions immediately on open
+  renderList("");
+}
+
+async function removeCategory(ctx, idx) {
+  if (ctx === "saved" && selectedRecipe) {
+    if (!selectedRecipe.categories) selectedRecipe.categories = selectedRecipe.category ? [selectedRecipe.category] : [];
+    selectedRecipe.categories.splice(idx, 1);
+    selectedRecipe.category = selectedRecipe.categories[0] || null;
+    await patchRecipe();
+    renderSavedDetail();
+  } else if (ctx === "meal" && selectedMeal) {
+    if (!selectedMeal.categories) selectedMeal.categories = selectedMeal.category ? [selectedMeal.category] : [];
+    selectedMeal.categories.splice(idx, 1);
+    selectedMeal.category = selectedMeal.categories[0] || null;
+    await patchMeal();
+    renderMealDetail();
+  }
+}
+
+async function patchMeal() {
+  if (!selectedMeal) return;
+  await fetch(`/meals/${selectedMeal.id}`, {
+    method:"PUT", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({name: selectedMeal.name, categories: selectedMeal.categories || [], category: selectedMeal.category})
+  });
+  const idx = savedMeals.findIndex(m => m.id === selectedMeal.id);
+  if (idx !== -1) savedMeals[idx] = {...selectedMeal};
   showToast();
 }
 
@@ -562,23 +1334,24 @@ async function saveImage() {
   }
 }
 
-function showToast() {
+function showToast(msg) {
   const t = document.getElementById("toast");
+  if (msg) t.textContent = msg;
   t.classList.add("show");
-  setTimeout(() => t.classList.remove("show"), 1800);
+  setTimeout(() => { t.classList.remove("show"); t.textContent = "Saved"; }, 1800);
 }
 
 async function deleteRecipe() {
-  if (!confirm(`Delete "${selectedRecipe.title}"?`)) return;
+  if (!await showConfirm(`Delete "${selectedRecipe.title}"?`)) return;
   await fetch(`/recipes/${selectedRecipe.id}`, {method:"DELETE"});
   savedRecipes = savedRecipes.filter(r => r.id !== selectedRecipe.id);
   updateSavedCount(); backToList(); renderGrid();
 }
 
 async function deleteRecipeById(id, e) {
-  e.stopPropagation(); // prevent opening the recipe
+  e.stopPropagation();
   const r = savedRecipes.find(r => r.id === id);
-  if (!r || !confirm(`Delete "${r.title}"?`)) return;
+  if (!r || !await showConfirm(`Delete "${r.title}"?`)) return;
   await fetch(`/recipes/${id}`, {method:"DELETE"});
   savedRecipes = savedRecipes.filter(r => r.id !== id);
   updateSavedCount(); updateCatFilter(); renderGrid();
@@ -760,15 +1533,19 @@ function parseServingsNumJS(s) {
 }
 
 // Unit lookup tables
-const VOL_TSP = { tsp:1, teaspoon:1, teaspoons:1, tbsp:3, tablespoon:3, tablespoons:3,
-  'fl.oz':6, floz:6, cup:48, cups:48, pint:96, pints:96, pt:96,
-  quart:192, quarts:192, qt:192, gallon:768, gallons:768, gal:768 };
-const WT_OZ = { oz:1, ounce:1, ounces:1, lb:16, lbs:16, pound:16, pounds:16 };
+const VOL_TSP = { tsp:1, tsps:1, teaspoon:1, teaspoons:1,
+  tbsp:3, tbsps:3, tbl:3, tbls:3, tablespoon:3, tablespoons:3,
+  'fl.oz':6, 'fl.ozs':6, floz:6, flozs:6,
+  cup:48, cups:48, pint:96, pints:96, pt:96, pts:96,
+  quart:192, quarts:192, qt:192, qts:192,
+  gallon:768, gallons:768, gal:768, gals:768 };
+const WT_OZ = { oz:1, ozs:1, ounce:1, ounces:1, lb:16, lbs:16, pound:16, pounds:16,
+  g:0.03527, gram:0.03527, grams:0.03527, kg:35.274, kilogram:35.274, kilograms:35.274 };
 
 function scaleIngredient(text, factor) {
   const MARK = "\x01";
   const NP = '(?:(?:\\d+\\s+)?\\d+\\/\\d+|\\d+(?:\\.\\d+)?)';
-  const UL = 'tsp|teaspoons?|tbsp|tablespoons?|fl\\.?\\s*oz|cups?|pints?|pt|quarts?|qt|gallons?|gal|oz|ounces?|lbs?|pounds?';
+  const UL = 'tsps?|teaspoons?|tbsps?|tbls?|tablespoons?|fl\\.?\\s*ozs?|cups?|pints?|pts?|quarts?|qts?|gallons?|gals?|ozs?|ounces?|lbs?|pounds?|kgs?|kilograms?|grams?|g(?=\\b)';
 
   const cvt = (v, unit) => {
     const k = unit.toLowerCase().replace(/\s/g, '');
@@ -1002,18 +1779,21 @@ function buildScrapeHTML(r) {
   const linkHtml = r.source_url ? `<a class="site-badge" href="${esc(r.source_url)}" target="_blank" rel="noopener" style="text-decoration:none">${esc(r.source_url)}</a><br>` : "";
 
   return `<div class="recipe-card">${heroHtml}<div class="card-body">
+    <div class="recipe-toolbar">
+      <div class="recipe-toolbar-left">${buildScaler("scrape",r)}</div>
+      <div class="recipe-toolbar-right">
+        <button id="save-scrape-btn" class="btn btn-primary" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="saveCurrentRecipe()">💾 Save</button>
+        <button class="btn btn-ghost" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="printRecipe('scrape')">🖨 Print</button>
+        <button class="btn btn-dark" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="exportRecipePdf('scrape')">💾 PDF</button>
+        <button class="btn btn-ghost" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="copyRecipe('scrape')">Copy</button>
+      </div>
+    </div>
     ${linkHtml}
     <div class="card-title">${esc(r.title||"Untitled Recipe")}</div>
-    <div class="meta">${buildScaler("scrape",r)}</div>
     <div class="section-title">Ingredients</div>
     ${buildIngGroupsReadonly(ig,"scrape")}
     <div class="section-title">Directions</div>
     ${buildStepGroupsReadonly(sg)}
-    <div class="btn-row">
-      <button id="save-scrape-btn" class="btn btn-primary" onclick="saveCurrentRecipe()">Save Recipe</button>
-      <button class="btn btn-dark" onclick="printRecipe('scrape')">Print</button>
-      <button class="btn btn-ghost" onclick="copyRecipe('scrape')">Copy</button>
-    </div>
   </div></div>`;
 }
 
@@ -1032,12 +1812,20 @@ function buildSavedHTML(r) {
   const multiStepGroup = sg.length > 1 || (sg[0] && sg[0].purpose);
 
   return `<div class="recipe-card">${heroHtml}<div class="card-body">
+    <div class="recipe-toolbar">
+      <div class="recipe-toolbar-left">${buildScaler("saved",r)}</div>
+      <div class="recipe-toolbar-right">
+        <button class="btn btn-ghost" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="printRecipe('saved')">🖨 Print</button>
+        <button class="btn btn-dark" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="exportRecipePdf('saved')">💾 Save PDF</button>
+        <button class="btn btn-ghost" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="copyRecipe('saved')">Copy</button>
+        <button class="btn btn-danger" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="deleteRecipe()">🗑 Delete</button>
+      </div>
+    </div>
     ${linkHtml}
     <div class="editable-title" onclick="inlineEditTitle(this)" title="Click to edit">${esc(r.title||"Untitled Recipe")}</div>
     <div class="meta">
-      ${buildScaler("saved",r)}
-      <div class="meta-item">🏷️
-        <span class="editable-span" onclick="inlineEditMeta(this,'category')" title="Click to edit category">${esc(r.category||"Add category…")}</span>
+      <div class="meta-item" style="align-items:flex-start">🏷️
+        <div>${buildCategoryTagsHTML("saved", r.categories && r.categories.length ? r.categories : (r.category ? [r.category] : []))}</div>
       </div>
     </div>
 
@@ -1053,11 +1841,6 @@ function buildSavedHTML(r) {
       ? `<button class="add-section-btn" onclick="addInstructionGroup()">+ Add direction section</button>`
       : `<button class="add-section-btn" onclick="addInstructionGroup()">+ Add section</button>`}
 
-    <div class="btn-row">
-      <button class="btn btn-dark" onclick="printRecipe('saved')">Print</button>
-      <button class="btn btn-ghost" onclick="copyRecipe('saved')">Copy</button>
-      <button class="btn btn-danger" onclick="deleteRecipe()">Delete</button>
-    </div>
     <p style="font-size:0.78rem;color:var(--muted);margin-top:0.6rem">Click any field to edit it</p>
   </div></div>`;
 }
@@ -1065,97 +1848,140 @@ function buildSavedHTML(r) {
 // ══════════════════════════════════════════════════════════════
 // Print (new window, AccuChef style)
 // ══════════════════════════════════════════════════════════════
+// Shared CSS used by both single-recipe and meal prints
+const PRINT_CSS = `
+  @page {
+    size: letter portrait;
+    margin: 0.75in 0.9in;
+    /* Remove browser-injected page numbers, URL, date */
+    @top-left   { content: none; }
+    @top-center { content: none; }
+    @top-right  { content: none; }
+    @bottom-left   { content: none; }
+    @bottom-center { content: none; }
+    @bottom-right  { content: none; }
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Comic Sans MS','Chalkboard SE','Comic Sans',cursive; font-size:11pt; color:#000; }
+  .title  { text-align:center; font-weight:bold; font-size:14pt; margin-bottom:1pt; }
+  .source { text-align:center; font-size:10pt; margin-bottom:1pt; }
+  .yield  { text-align:center; font-size:11pt; margin-bottom:8pt; }
+  .note   { font-style:italic; margin-bottom:8pt; font-size:10.5pt; line-height:1.4; }
+  .ings { column-count:2; column-gap:1.6em; margin-bottom:14pt; }
+  .ing  { font-size:11pt; line-height:1.35; margin:0 0 1.5pt; break-inside:avoid; }
+  .ing-hdr { font-weight:bold; font-size:11pt; line-height:1.35; margin:0 0 1pt; break-inside:avoid; break-after:avoid; }
+  .directions { font-size:11pt; line-height:1.6; text-align:justify; margin:0 0 4pt 0; }
+  .dir-hdr { font-weight:bold; font-size:11pt; line-height:1.35; margin:4pt 0 0; }
+  .page-break { page-break-after:always; }
+`;
+
+// Build the inner body HTML for one recipe at a given serving scale factor
+function buildRecipeBlock(r, factor) {
+  factor = factor || 1;
+  const isScaled = Math.abs(factor - 1) > 0.01;
+
+  const rawIg = r.ingredient_groups || [{purpose:null, ingredients:r.ingredients||[]}];
+  const ig = isScaled ? rawIg.map(g => ({
+    ...g, ingredients: (g.ingredients||[]).map(ing => scaleIngredient(ing, factor))
+  })) : rawIg;
+  const sg = r.instruction_groups || [{purpose:null, steps:r.instructions||[]}];
+  const multiIngGroup = ig.length > 1 || (ig[0] && ig[0].purpose);
+  const multiStepGroup = sg.length > 1 || (sg[0] && sg[0].purpose);
+
+  let printServings = r.servings || "";
+  const origServings = r.servings_num || parseServingsNumJS(r.servings);
+  if (isScaled && origServings) {
+    const scaled = origServings * factor;
+    printServings = r.servings
+      ? r.servings.replace(/\d+(\.\d+)?/, formatNum(scaled))
+      : String(formatNum(scaled));
+  }
+
+  // Ingredients: CSS two-column flow — no paired rows, no artificial gaps
+  let ingItems = "";
+  ig.forEach(g => {
+    if (multiIngGroup && g.purpose)
+      ingItems += `<div class="ing-hdr">${escP(g.purpose)}</div>`;
+    (g.ingredients || []).filter(t => t && t.trim()).forEach(t => {
+      ingItems += `<div class="ing">${escP(t)}</div>`;
+    });
+  });
+  const ingSections = `<div class="ings">${ingItems}</div>`;
+
+  // Directions
+  let stepSections = "";
+  sg.forEach(g => {
+    if (multiStepGroup && g.purpose)
+      stepSections += `<p class="dir-hdr">${escP(g.purpose)}</p>`;
+    const para = (g.steps || []).filter(s => s && s.trim()).join(" ").trim();
+    if (para) stepSections += `<p class="directions">${escP(para)}</p>`;
+  });
+
+  const sourceHtml = r.site_name ? `<div class="source">${escP(r.site_name)}</div>` : "";
+  const yieldHtml  = printServings ? `<div class="yield">Yield: ${escP(printServings)}</div>` : "";
+  const noteHtml   = r.note ? `<div class="note">Note: ${escP(r.note)}</div>` : "";
+
+  return `<div class="title">${escP(r.title||"Recipe")}</div>
+${sourceHtml}${yieldHtml}${noteHtml}
+${ingSections}
+${stepSections}`;
+}
+
 function printRecipe(ctx) {
   const r = ctx === "scrape" ? currentScrape : selectedRecipe;
   if (!r) return;
 
-  // Determine scale factor from current scaler input
   const scalerInput = document.getElementById(`scaler-${ctx}`);
   const currentServings = scalerInput ? parseFloat(scalerInput.value) : null;
   const origServings = r.servings_num || parseServingsNumJS(r.servings);
   const factor = (currentServings && origServings && currentServings > 0)
     ? currentServings / origServings : 1;
-  const isScaled = Math.abs(factor - 1) > 0.01;
-
-  // Build scaled ingredient groups
-  const rawIg = r.ingredient_groups || [{purpose:null, ingredients:r.ingredients||[]}];
-  const ig = isScaled ? rawIg.map(g => ({
-    ...g, ingredients: (g.ingredients||[]).map(ing => scaleIngredient(ing, factor))
-  })) : rawIg;
-
-  const sg = r.instruction_groups || [{purpose:null, steps:r.instructions||[]}];
-  const multiIngGroup = ig.length > 1 || (ig[0] && ig[0].purpose);
-  const multiStepGroup = sg.length > 1 || (sg[0] && sg[0].purpose);
-
-  // Build scaled yield string
-  let printServings = r.servings || "";
-  if (isScaled && origServings && currentServings) {
-    printServings = r.servings
-      ? r.servings.replace(/\d+(\.\d+)?/, formatNum(currentServings))
-      : String(currentServings);
-  }
-
-  // Build a flat item list: section headers + ingredients in order
-  const flatItems = [];
-  ig.forEach(g => {
-    if (multiIngGroup && g.purpose) flatItems.push({bold: true, text: g.purpose});
-    (g.ingredients || []).forEach(t => flatItems.push({bold: false, text: t}));
-  });
-
-  // Split the ENTIRE flat list once at the midpoint
-  const splitAt = Math.ceil(flatItems.length / 2);
-  const leftCol = flatItems.slice(0, splitAt);
-  const rightCol = flatItems.slice(splitAt);
-
-  let ingRows = "";
-  for (let i = 0; i < Math.max(leftCol.length, rightCol.length); i++) {
-    const l = leftCol[i], r = rightCol[i];
-    const lCell = l ? (l.bold ? `<td style="font-weight:bold;padding:0">${escP(l.text)}</td>` : `<td>${escP(l.text)}</td>`) : '<td></td>';
-    const rCell = r ? (r.bold ? `<td style="font-weight:bold;padding:0">${escP(r.text)}</td>` : `<td>${escP(r.text)}</td>`) : '<td></td>';
-    ingRows += `<tr>${lCell}${rCell}</tr>`;
-  }
-  const ingSections = `<table class="ings"><tbody>${ingRows}</tbody></table>`;
-
-  // Directions — section names as bold lines, no gap, immediately followed by paragraph
-  let stepSections = "";
-  sg.forEach(g => {
-    if (multiStepGroup && g.purpose)
-      stepSections += `<p style="font-weight:bold;margin:0;line-height:1.35">${escP(g.purpose)}</p>`;
-    const para = (g.steps || []).join(" ").trim();
-    if (para) stepSections += `<p class="directions">${escP(para)}</p>`;
-  });
-
-  const sourceHtml = r.site_name ? `<div class="source">${escP(r.site_name)}</div>` : "";
-  const yieldHtml = printServings ? `<div class="yield">Yield: ${escP(printServings)}</div>` : "";
-  const noteHtml = r.note ? `<div class="note">Note: ${escP(r.note)}</div>` : "";
 
   const html = `<!DOCTYPE html><html><head>
 <meta charset="UTF-8"/>
 <title>${escP(r.title||"Recipe")}</title>
-<style>
-  @page { size:letter portrait; margin:0.75in 0.9in; }
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family:'Comic Sans MS','Chalkboard SE','Comic Sans',cursive; font-size:11pt; color:#000; }
-  .title { text-align:center; font-weight:bold; font-size:14pt; margin-bottom:1pt; }
-  .source { text-align:center; font-size:10pt; margin-bottom:1pt; }
-  .yield { text-align:center; font-size:11pt; margin-bottom:8pt; }
-  .note { font-style:italic; margin-bottom:8pt; font-size:10.5pt; line-height:1.4; }
-  table.ings { width:100%; border-collapse:collapse; margin-bottom:6pt; }
-  table.ings td { font-size:11pt; line-height:1.35; padding:0; vertical-align:top; width:50%; }
-  .directions { font-size:11pt; line-height:1.6; text-align:justify; margin:0 0 4pt 0; }
-</style>
+<style>${PRINT_CSS}</style>
 </head><body>
-<div class="title">${escP(r.title||"Recipe")}</div>
-${sourceHtml}${yieldHtml}${noteHtml}
-${ingSections}
-${stepSections}
+${buildRecipeBlock(r, factor)}
 </body></html>`;
+  doPrint(html);
+}
 
-  const w = window.open("","_blank","width=820,height=1060");
-  w.document.write(html);
-  w.document.close();
-  w.focus();
-  setTimeout(() => w.print(), 400);
+function _mealRecipeFactor(m, mr) {
+  // mr is the meal recipe entry (has .recipe_servings, .servings_num, .servings)
+  const r = savedRecipes.find(r => r.id === mr.id);
+  if (!r) return 1;
+  const effectiveServings = mr.recipe_servings != null ? mr.recipe_servings
+                          : (m.default_servings != null ? m.default_servings : null);
+  const origNum = r.servings_num || parseServingsNumJS(r.servings) || null;
+  return (effectiveServings && origNum && origNum > 0) ? effectiveServings / origNum : 1;
+}
+
+function printMeal() {
+  const m = selectedMeal;
+  if (!m) return;
+  if (!m.recipes || m.recipes.length === 0) { showAlert("No recipes in this meal to print."); return; }
+  const pairs = m.recipes.map(mr => {
+    const r = savedRecipes.find(r => r.id === mr.id);
+    return r ? {r, factor: _mealRecipeFactor(m, mr)} : null;
+  }).filter(Boolean);
+  if (!pairs.length) { showAlert("Recipe data not loaded yet."); return; }
+
+  const blocks = pairs.map(({r, factor}, i) => {
+    const block = buildRecipeBlock(r, factor);
+    return i < pairs.length - 1
+      ? `<div>${block}</div><div class="page-break"></div>`
+      : `<div>${block}</div>`;
+  }).join("");
+
+  const html = `<!DOCTYPE html><html><head>
+<meta charset="UTF-8"/>
+<title>${escP(m.name||"Meal")}</title>
+<style>${PRINT_CSS}</style>
+</head><body>
+${blocks}
+</body></html>`;
+  doPrint(html);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1205,7 +2031,7 @@ async function updateSavedCount() {
 
 // ── Create Recipe modal ───────────────────────────────────────
 function openCreateRecipeModal() {
-  ["cr-title","cr-servings","cr-category","cr-image"].forEach(id => {
+  ["cr-title","cr-servings","cr-category","cr-source-url","cr-image"].forEach(id => {
     document.getElementById(id).value = "";
   });
   document.getElementById("cr-ingredients").value = "";
@@ -1220,10 +2046,11 @@ function closeCreateRecipeModal(e) {
 
 async function submitCreateRecipe() {
   const title = document.getElementById("cr-title").value.trim();
-  if (!title) { alert("Please enter a recipe title."); return; }
-  const servings = document.getElementById("cr-servings").value.trim();
-  const category = document.getElementById("cr-category").value.trim();
-  const imageUrl = document.getElementById("cr-image").value.trim();
+  if (!title) { showAlert("Please enter a recipe title."); return; }
+  const servings  = document.getElementById("cr-servings").value.trim();
+  const cats      = document.getElementById("cr-category").value.split(",").map(s=>s.trim()).filter(Boolean).slice(0,5);
+  const sourceUrl = document.getElementById("cr-source-url").value.trim();
+  const imageUrl  = document.getElementById("cr-image").value.trim();
   const ingredients = document.getElementById("cr-ingredients").value
     .split("\n").map(l => l.trim()).filter(Boolean);
   const steps = document.getElementById("cr-instructions").value
@@ -1231,12 +2058,14 @@ async function submitCreateRecipe() {
   const recipe = {
     title, servings,
     servings_num: parseServingsNumJS(servings),
-    category: category || null,
+    categories: cats,
+    category: cats[0] || null,
     image: imageUrl || null,
     ingredient_groups: [{purpose:null, ingredients}],
     instruction_groups: [{purpose:null, steps}],
     ingredients, instructions: steps,
-    total_time: null, site_name: null, source_url: null,
+    total_time: null, site_name: null,
+    source_url: sourceUrl || null,
   };
   const res = await fetch("/recipes", {
     method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(recipe)
@@ -1249,12 +2078,981 @@ async function submitCreateRecipe() {
     showTab("saved");
     openRecipe(saved.id);
   } else {
-    alert("Failed to create recipe.");
+    showAlert("Failed to create recipe.");
   }
 }
 
+// ══════════════════════════════════════════════════════════════
+// Import Recipes Modal (My Recipes tab)
+// ══════════════════════════════════════════════════════════════
+let _irSelectedFile = null;
+
+function openImportRecipesModal() {
+  _irSelectedFile = null;
+  document.getElementById("ir-file-input").value = "";
+  document.getElementById("ir-file-name").textContent = "No file chosen";
+  document.getElementById("ir-preview").hidden = true;
+  document.getElementById("ir-preview").innerHTML = "";
+  document.getElementById("ir-status").textContent = "";
+  document.getElementById("ir-import-btn").hidden = true;
+  // Show active cookbook name
+  const active = savedCookbooks ? savedCookbooks.find(c => c.isActive) : null;
+  const nameEl = document.getElementById("ir-cookbook-name");
+  if (nameEl) nameEl.textContent = active ? active.name : document.getElementById("cookbook-name-display").textContent;
+  document.getElementById("import-recipes-modal-backdrop").hidden = false;
+}
+
+function closeImportRecipesModal(e) {
+  if (!e || e.target === document.getElementById("import-recipes-modal-backdrop"))
+    document.getElementById("import-recipes-modal-backdrop").hidden = true;
+}
+
+async function handleIRFileSelect(input) {
+  const file = input.files[0];
+  if (!file) return;
+  _irSelectedFile = file;
+  document.getElementById("ir-file-name").textContent = file.name;
+  document.getElementById("ir-import-btn").hidden = true;
+  document.getElementById("ir-status").textContent = "Reading file…";
+  document.getElementById("ir-preview").hidden = true;
+
+  const ext = file.name.split(".").pop().toLowerCase();
+  const preview = document.getElementById("ir-preview");
+
+  if (ext === "txt") {
+    // Read locally and show first few lines as preview
+    const text = await file.text();
+    const lines = text.split("\n").filter(l => l.trim());
+    const title = lines[0] || "(no title)";
+    const ingIdx = lines.findIndex(l => /^ingredients?\s*:?\s*$/i.test(l.trim()));
+    const insIdx = lines.findIndex(l => /^(instructions?|directions?|steps?|method)\s*:?\s*$/i.test(l.trim()));
+    preview.innerHTML = `<strong>Detected:</strong> 1 recipe<br>
+      <strong>Title:</strong> ${esc(title)}<br>
+      ${ingIdx !== -1 ? `<strong>Ingredients section found</strong> at line ${ingIdx+1}<br>` : ""}
+      ${insIdx !== -1 ? `<strong>Instructions section found</strong> at line ${insIdx+1}<br>` : ""}
+      <span style="color:var(--muted)">${lines.length} lines total</span>`;
+    preview.hidden = false;
+    document.getElementById("ir-status").textContent = "";
+    document.getElementById("ir-import-btn").hidden = false;
+  } else {
+    // Upload to server for peek
+    const form = new FormData();
+    form.append("file", file);
+    try {
+      const res = await fetch("/recipes/import-peek", { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok) {
+        document.getElementById("ir-status").style.color = "var(--red)";
+        document.getElementById("ir-status").textContent = data.error || "Could not read file.";
+        return;
+      }
+      const typeLabel = data.type === "csv_rm" ? "Macleay Recipe Manager CSV"
+                      : data.type === "csv"    ? "AccuChef CSV"
+                      : "Recipe Manager Cookbook";
+      preview.innerHTML = `<strong>Type:</strong> ${typeLabel}<br>
+        <strong>Recipes found:</strong> ${data.recipeCount}<br>
+        <span style="color:var(--muted)">All ${data.recipeCount} recipe${data.recipeCount!==1?"s":""} will be added to your current cookbook.</span>`;
+      preview.hidden = false;
+      document.getElementById("ir-status").textContent = "";
+      document.getElementById("ir-import-btn").hidden = data.recipeCount === 0;
+      if (data.recipeCount === 0) {
+        document.getElementById("ir-status").style.color = "var(--red)";
+        document.getElementById("ir-status").textContent = "No recipes found in this file.";
+      }
+    } catch {
+      document.getElementById("ir-status").style.color = "var(--red)";
+      document.getElementById("ir-status").textContent = "Failed to read file.";
+    }
+  }
+}
+
+async function confirmImportRecipes() {
+  if (!_irSelectedFile) return;
+  const btn = document.getElementById("ir-import-btn");
+  const status = document.getElementById("ir-status");
+  btn.disabled = true;
+  btn.textContent = "Importing…";
+  status.style.color = "var(--muted)";
+  status.textContent = "Importing, please wait…";
+
+  const form = new FormData();
+  form.append("file", _irSelectedFile);
+  try {
+    const res = await fetch("/recipes/import-file", { method: "POST", body: form });
+    const data = await res.json();
+    if (res.ok) {
+      closeImportRecipesModal();
+      await loadSavedRecipes();
+      updateSavedCount(); updateCatFilter(); renderGrid();
+      showToast(`Imported ${data.imported} recipe${data.imported!==1?"s":""}!`);
+    } else {
+      status.style.color = "var(--red)";
+      status.textContent = data.error || "Import failed.";
+      btn.disabled = false;
+      btn.textContent = "Import";
+    }
+  } catch {
+    status.style.color = "var(--red)";
+    status.textContent = "Import failed — server error.";
+    btn.disabled = false;
+    btn.textContent = "Import";
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// Menu bar
+// ══════════════════════════════════════════════════════════════
+function toggleMenu(name) {
+  const all = ["file","help"];
+  all.forEach(m => {
+    if (m !== name) { const el = document.getElementById(`${m}-menu`); if (el) el.hidden = true; }
+  });
+  const menu = document.getElementById(`${name}-menu`);
+  if (menu) menu.hidden = !menu.hidden;
+}
+function closeAllMenus() {
+  ["file","help"].forEach(m => { const el = document.getElementById(`${m}-menu`); if (el) el.hidden = true; });
+}
+function menuAction(fn) { closeAllMenus(); fn(); }
+document.addEventListener("click", e => {
+  if (!e.target.closest(".menu-wrap")) closeAllMenus();
+});
+
+// ══════════════════════════════════════════════════════════════
+// Settings
+// ══════════════════════════════════════════════════════════════
+// ── Color helpers ─────────────────────────────────────────────
+const COLOR_PRESETS = [
+  "#c0392b","#e74c3c","#e67e22","#f39c12",
+  "#27ae60","#16a085","#2980b9","#1a56db",
+  "#8e44ad","#2c3e50","#7f8c8d","#b7762e"
+];
+function darkenColor(hex, amt) {
+  const n = parseInt(hex.replace("#",""), 16);
+  const r = Math.max(0, ((n >> 16) & 255) - Math.round(255 * amt));
+  const g = Math.max(0, ((n >>  8) & 255) - Math.round(255 * amt));
+  const b = Math.max(0, ((n      ) & 255) - Math.round(255 * amt));
+  return "#" + [r,g,b].map(x => x.toString(16).padStart(2,"0")).join("");
+}
+function renderColorSwatches() {
+  const el = document.getElementById("color-swatches");
+  if (!el) return;
+  const cur = appSettings.accentColor || "#c0392b";
+  el.innerHTML = COLOR_PRESETS.map(c =>
+    `<div class="color-swatch${c===cur?' active':''}" style="background:${c};border-color:${c==='#fff'?'#ccc':c}"
+      title="${c}" onclick="pickPresetColor('${c}')"></div>`
+  ).join("");
+}
+function pickPresetColor(color) {
+  document.getElementById("setting-accent-color").value = color;
+  saveSetting("accentColor", color);
+  renderColorSwatches();
+}
+
+async function loadAppSettings() {
+  try { appSettings = await (await fetch("/settings")).json(); } catch { appSettings = {}; }
+  applySettings();
+  document.getElementById("setting-dark-mode").checked = appSettings.theme === "dark";
+  const fsSel = document.getElementById("setting-font-size");
+  if (fsSel) fsSel.value = +(appSettings.fontSize) || 16;
+  const cp = document.getElementById("setting-accent-color");
+  if (cp) cp.value = appSettings.accentColor || "#c0392b";
+  const vmSel = document.getElementById("setting-view-mode");
+  if (vmSel) vmSel.value = appSettings.viewMode || "grid";
+  renderColorSwatches();
+  try {
+    const fc = await (await fetch("/file/current")).json();
+    const cbSpan = document.getElementById("setting-active-cookbook");
+    if (cbSpan) cbSpan.textContent = fc.name || "—";
+  } catch {}
+}
+async function saveSetting(key, value) {
+  appSettings[key] = value;
+  try {
+    await fetch("/settings", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({[key]:value}) });
+  } catch {}
+  applySettings();
+}
+function applySettings() {
+  document.documentElement.setAttribute("data-theme", appSettings.theme || "light");
+  // Font size: numeric px value set directly on html element
+  const px = Math.min(28, Math.max(10, +(appSettings.fontSize) || 16));
+  document.documentElement.style.fontSize = px + "px";
+  // Accent color
+  const color = appSettings.accentColor || "#c0392b";
+  document.documentElement.style.setProperty("--red", color);
+  document.documentElement.style.setProperty("--red-dark", darkenColor(color, 0.12));
+  document.documentElement.style.setProperty("--header-bg", color);
+  // Auto-derive body text colour from theme (no manual override)
+  document.documentElement.style.removeProperty("--text");
+  // Re-render any open grids when view mode changes
+  if (document.getElementById("recipe-grid")) renderGrid();
+  if (document.getElementById("meals-grid") && !document.getElementById("meals-list-view").hidden) {
+    const fn = window._renderMealsGrid; if (fn) fn();
+  }
+  if (document.getElementById("groupmeal-grid") && !document.getElementById("groupmeal-list-view").hidden) {
+    renderGroupMealList();
+  }
+}
+
+// ── Custom confirm dialog ──────────────────────────────────────
+let _confirmResolve = null;
+function showConfirm(message, okLabel = "Delete") {
+  return new Promise(resolve => {
+    _confirmResolve = resolve;
+    document.getElementById("confirm-modal-msg").textContent = message;
+    document.getElementById("confirm-modal-ok").textContent = okLabel;
+    document.getElementById("confirm-modal-backdrop").hidden = false;
+  });
+}
+function showAlert(message) {
+  document.getElementById("alert-modal-msg").textContent = message;
+  document.getElementById("alert-modal-backdrop").hidden = false;
+}
+function resolveConfirm(value) {
+  document.getElementById("confirm-modal-backdrop").hidden = true;
+  if (_confirmResolve) { _confirmResolve(value); _confirmResolve = null; }
+}
+function closeConfirm(e) {
+  if (!e || e.target === document.getElementById("confirm-modal-backdrop")) resolveConfirm(false);
+}
+
+// ── Custom prompt (replaces browser prompt()) ─────────────────
+let _promptResolve = null;
+function showPrompt(message, defaultValue = "") {
+  return new Promise(resolve => {
+    _promptResolve = resolve;
+    document.getElementById("prompt-modal-msg").textContent = message;
+    const inp = document.getElementById("prompt-modal-input");
+    inp.value = defaultValue;
+    document.getElementById("prompt-modal-backdrop").hidden = false;
+    setTimeout(() => { inp.focus(); inp.select(); }, 60);
+  });
+}
+function resolvePrompt(value) {
+  document.getElementById("prompt-modal-backdrop").hidden = true;
+  if (_promptResolve) { _promptResolve(value === "" ? null : value); _promptResolve = null; }
+}
+document.getElementById("prompt-modal-input").addEventListener("keydown", e => {
+  if (e.key === "Enter")  resolvePrompt(e.target.value);
+  if (e.key === "Escape") resolvePrompt(null);
+});
+function showSettingsPanel() {
+  closeAllMenus();
+  document.getElementById("settings-modal-backdrop").hidden = false;
+}
+function closeSettingsPanel(e) {
+  if (!e || e.target === document.getElementById("settings-modal-backdrop"))
+    document.getElementById("settings-modal-backdrop").hidden = true;
+}
+
+// ══════════════════════════════════════════════════════════════
+// Help / About
+// ══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
+// Help system
+// ══════════════════════════════════════════════════════════════
+const HELP_TOPICS = [
+  { id:"scrape",    icon:"🔍", label:"Scraping Recipes" },
+  { id:"myrecipes", icon:"📋", label:"My Recipes" },
+  { id:"editing",   icon:"✏️",  label:"Editing a Recipe" },
+  { id:"create",    icon:"➕", label:"Creating a Recipe" },
+  { id:"categories",icon:"🏷️", label:"Categories" },
+  { id:"cookbooks", icon:"📚", label:"Cookbooks" },
+  { id:"importexp", icon:"📥", label:"Import &amp; Export" },
+  { id:"meals",     icon:"🍽️", label:"Meals" },
+  { id:"groupmeal", icon:"🍴", label:"Group Meal" },
+  { id:"shopping",  icon:"🛒", label:"Shopping List" },
+  { id:"print",     icon:"🖨️", label:"Printing &amp; PDF" },
+  { id:"settings",  icon:"⚙️", label:"Settings" },
+  { id:"about",     icon:"ℹ️",  label:"About" },
+];
+
+const HELP_CONTENT = {
+  scrape: `<h3>🔍 Scraping Recipes</h3>
+    <p>The <strong>Scrape Recipe</strong> tab lets you grab a recipe directly from almost any recipe website just by pasting its URL.</p>
+    <h4>How to use it</h4>
+    <ul>
+      <li>Go to the <strong>Scrape Recipe</strong> tab</li>
+      <li>Paste the full URL of a recipe page (e.g. <em>https://www.allrecipes.com/recipe/…</em>)</li>
+      <li>Click <strong>Get Recipe</strong> — the app reads the page and extracts the title, ingredients, and instructions automatically</li>
+      <li>Review the result, then click <strong>Save Recipe</strong> to add it to your cookbook</li>
+    </ul>
+    <h4>Tips</h4>
+    <ul>
+      <li>You can adjust the serving size with the <strong>Servings</strong> scaler before saving — all ingredient amounts scale automatically</li>
+      <li>Click <strong>Print</strong> to print the recipe before saving it</li>
+      <li>Not every website is supported. If a site fails, use <strong>Create Recipe</strong> in My Recipes and paste the content manually</li>
+    </ul>
+    <div class="help-tip">💡 Most major recipe sites (AllRecipes, Food Network, Tasty, BBC Good Food, etc.) work out of the box.</div>`,
+
+  myrecipes: `<h3>📋 My Recipes</h3>
+    <p>This is your recipe library — every recipe you've saved lives here, organized the way you want.</p>
+    <h4>Browsing &amp; Searching</h4>
+    <ul>
+      <li>Use the <strong>Search bar</strong> (left side) to filter by title, category, servings, or source site as you type</li>
+      <li>Use the <strong>Sort</strong> dropdown to order by Newest, Oldest, A→Z, Z→A, By Category, or Most Used</li>
+      <li>Use the <strong>Category filter</strong> to show only recipes in a specific category</li>
+    </ul>
+    <h4>Recipe Cards</h4>
+    <ul>
+      <li>Click a card to open and edit the recipe</li>
+      <li>Hover a card to reveal the <strong>✕ delete</strong> button in the top-right corner</li>
+      <li>All category badges are shown on each card</li>
+    </ul>
+    <h4>Adding Recipes</h4>
+    <ul>
+      <li><strong>+ Create</strong> — manually type in a new recipe</li>
+      <li><strong>📥 Import</strong> — load recipes from a text file, cookbook file, or CSV</li>
+      <li>Or use the <strong>Scrape Recipe</strong> tab to grab one from a website</li>
+    </ul>`,
+
+  editing: `<h3>✏️ Editing a Recipe</h3>
+    <p>Everything in a saved recipe is editable by clicking it — no separate "edit mode" needed.</p>
+    <h4>What you can click to edit</h4>
+    <ul>
+      <li><strong>Title</strong> — click the big title text</li>
+      <li><strong>Any ingredient</strong> — click the ingredient text, type the new value, press Enter</li>
+      <li><strong>Any instruction step</strong> — click the step text, edit, press Enter</li>
+      <li><strong>Category tags</strong> — click × to remove, click <em>+ Add</em> to add new ones</li>
+      <li><strong>Photo</strong> — click the photo (or the "+ Add Photo" placeholder) to change or upload an image</li>
+    </ul>
+    <h4>Ingredients &amp; Instructions</h4>
+    <ul>
+      <li>Use <strong>+ Add item</strong> at the bottom of a section to add a new line</li>
+      <li>Use <strong>+ Add section</strong> to create a named sub-group (e.g. "For the sauce")</li>
+      <li>Click the section header to rename it</li>
+      <li>The small <strong>✕</strong> button on each line deletes that item</li>
+    </ul>
+    <h4>Serving Scaler</h4>
+    <ul>
+      <li>Change the <strong>Servings</strong> number at the top — all ingredient amounts scale proportionally</li>
+      <li>Click <strong>Make Default</strong> to permanently save the scaled amounts as the recipe's base</li>
+    </ul>
+    <div class="help-tip">💡 All edits are saved automatically — there is no Save button needed.</div>`,
+
+  create: `<h3>➕ Creating a Recipe</h3>
+    <p>Use <strong>+ Create</strong> on the My Recipes page to write a recipe from scratch.</p>
+    <h4>Fields</h4>
+    <ul>
+      <li><strong>Title</strong> (required) — the recipe name</li>
+      <li><strong>Servings</strong> — e.g. "4 servings" or "makes 12"</li>
+      <li><strong>Categories</strong> — comma-separated, up to 5 (e.g. <em>Dinner, Italian, Quick</em>)</li>
+      <li><strong>Ingredients</strong> — one ingredient per line</li>
+      <li><strong>Instructions</strong> — one step per line</li>
+      <li><strong>Website Link</strong> (optional) — the original recipe URL if you have it</li>
+      <li><strong>Image URL</strong> (optional) — a link to a photo</li>
+    </ul>
+    <h4>After creating</h4>
+    <ul>
+      <li>The recipe opens immediately so you can keep editing it inline</li>
+      <li>You can add ingredient/instruction sections, upload a photo, and more from the detail view</li>
+    </ul>
+    <div class="help-tip">💡 You can also import a plain <strong>.txt file</strong> with a recipe — label sections <em>Ingredients:</em> and <em>Instructions:</em> and the app will parse them automatically.</div>`,
+
+  categories: `<h3>🏷️ Categories</h3>
+    <p>Categories help you organize and filter your recipes and meals. Each recipe or meal can have <strong>up to 5 categories</strong>.</p>
+    <h4>Adding categories</h4>
+    <ul>
+      <li>Open a recipe and click <strong>+ Add</strong> next to the category tags</li>
+      <li>A dropdown of your existing categories appears — click one to reuse it, or type a new name</li>
+      <li>Press <strong>Enter</strong> or <strong>,</strong> (comma) to confirm, <strong>Esc</strong> to cancel</li>
+    </ul>
+    <h4>Removing categories</h4>
+    <ul>
+      <li>Click the <strong>×</strong> on any category tag to remove it from that recipe</li>
+    </ul>
+    <h4>Filtering by category</h4>
+    <ul>
+      <li>In My Recipes, use the <strong>Category</strong> dropdown to show only recipes that match</li>
+      <li>The filter works across all categories — a recipe shows if <em>any</em> of its categories match</li>
+    </ul>
+    <h4>When creating a recipe</h4>
+    <ul>
+      <li>Type categories comma-separated in the Categories field: <em>Dinner, Italian, Quick Meals</em></li>
+    </ul>
+    <div class="help-tip">💡 Categories are shared across recipes automatically — your existing ones appear as suggestions whenever you add a new category.</div>`,
+
+  cookbooks: `<h3>📚 Cookbooks</h3>
+    <p>A <strong>cookbook</strong> is a self-contained collection of recipes stored as a <em>.cookbook</em> file. You can have as many as you want — one for family recipes, one for work lunches, one per cuisine, etc.</p>
+    <h4>Managing cookbooks</h4>
+    <ul>
+      <li>Go to the <strong>📚 Cookbooks</strong> tab to see all your cookbooks</li>
+      <li>Click a cookbook card to <strong>switch</strong> to it — all tabs immediately show that cookbook's recipes</li>
+      <li>Click the <strong>✏️ rename</strong> icon to rename a cookbook</li>
+      <li>Click the <strong>🗑️ delete</strong> icon to delete it — you must always keep at least one cookbook</li>
+    </ul>
+    <h4>Creating &amp; importing</h4>
+    <ul>
+      <li><strong>New Cookbook</strong> (File menu or Cookbooks tab) — creates a fresh empty cookbook</li>
+      <li><strong>Import Cookbook</strong> (Cookbooks tab) — import a <em>.cookbook</em> file or an AccuChef CSV as a new cookbook</li>
+    </ul>
+    <h4>Exporting</h4>
+    <ul>
+      <li>Click the <strong>📤 export</strong> icon on a cookbook card to save it as a CSV file</li>
+      <li>The exported CSV preserves everything — photos, links, categories, ingredient groups — and can be imported back perfectly</li>
+    </ul>
+    <div class="help-tip">💡 Cookbook files are stored in a <em>cookbooks/</em> folder. Use <strong>File → Open Cookbooks Folder</strong> to see them in your file explorer.</div>`,
+
+  importexp: `<h3>📥 Import &amp; Export</h3>
+    <h4>Importing recipes into the current cookbook</h4>
+    <p>Click <strong>📥 Import</strong> on the My Recipes page. Supports three file types:</p>
+    <ul>
+      <li><strong>.txt — Text file</strong>: A single recipe. First line = title. Label sections <em>Ingredients:</em> and <em>Instructions:</em>, one item per line. Optional lines: <em>Servings:</em>, <em>Category:</em>, <em>Time:</em>, <em>Source:</em></li>
+      <li><strong>.cookbook — Cookbook file</strong>: Every recipe inside gets added to your current cookbook</li>
+      <li><strong>.csv — Spreadsheet</strong>: Two formats are supported —
+        <ul>
+          <li><em>Macleay Recipe Manager CSV</em> (exported from this app) — full fidelity, preserves photos, categories, all fields</li>
+          <li><em>AccuChef CSV</em> — imports title, category, servings, ingredients, and instructions</li>
+        </ul>
+      </li>
+    </ul>
+    <h4>Importing as a new cookbook</h4>
+    <ul>
+      <li>Go to the <strong>Cookbooks</strong> tab and click <strong>Import Cookbook</strong></li>
+      <li>Choose a <em>.cookbook</em> or <em>.csv</em> file — it becomes a brand new cookbook</li>
+    </ul>
+    <h4>Exporting a cookbook</h4>
+    <ul>
+      <li>Click the <strong>📤</strong> icon on any cookbook card in the Cookbooks tab</li>
+      <li>Saves as a Macleay Recipe Manager CSV — all photos are embedded so the file is fully self-contained</li>
+    </ul>
+    <div class="help-tip">💡 Macleay Recipe Manager CSV is the best format for backups — it round-trips perfectly with no data loss.</div>`,
+
+  meals: `<h3>🍽️ Meals</h3>
+    <p>A <strong>Meal</strong> is a named group of recipes — useful for planning dinner parties, weekly menus, or themed nights.</p>
+    <h4>Creating a meal</h4>
+    <ul>
+      <li>Go to the <strong>Meals</strong> tab and click <strong>+ New Meal</strong></li>
+      <li>Give it a name (e.g. "Sunday Roast") and click the card to open it</li>
+    </ul>
+    <h4>Adding recipes to a meal</h4>
+    <ul>
+      <li>Open a meal — use the <strong>Add Recipe</strong> search at the bottom to find recipes from your cookbook</li>
+      <li>Click a recipe card to add it; click <strong>✕</strong> next to a recipe in the list to remove it</li>
+    </ul>
+    <h4>Printing &amp; saving a meal</h4>
+    <ul>
+      <li>Click <strong>🖨 Print All Recipes</strong> to print every recipe in the meal with page breaks between them</li>
+      <li>Click <strong>💾 Save Recipes PDF</strong> to export all the meal's recipes directly to a PDF file</li>
+    </ul>
+    <h4>Shopping from a meal</h4>
+    <ul>
+      <li>Go to the <strong>Shopping List</strong> tab and search for your meal — add it all at once</li>
+      <li>Or use the <strong>Group Meal</strong> tab to combine multiple meals into one shopping list</li>
+    </ul>`,
+
+  groupmeal: `<h3>🍴 Group Meal</h3>
+    <p>A <strong>Group Meal</strong> combines any number of saved meals so you can print all their recipes and a merged shopping list in one go. Groups are saved and editable just like meals.</p>
+    <h4>Creating a group meal</h4>
+    <ul>
+      <li>Go to the <strong>🍽️ Group Meal</strong> tab and click <strong>+ New Group Meal</strong></li>
+      <li>Give it a name (e.g. "Christmas Dinner") and the detail view opens</li>
+    </ul>
+    <h4>Adding &amp; removing meals</h4>
+    <ul>
+      <li>Search for a meal in the <strong>Add Meal</strong> search box — click a result to add it</li>
+      <li>Click <strong>✕</strong> next to any meal in the list to remove it</li>
+      <li>Click the group name at the top to rename it</li>
+    </ul>
+    <h4>Printing &amp; exporting</h4>
+    <ul>
+      <li><strong>🖨 Print Recipes</strong> — prints all recipes from every meal (one per page, same clean format as single-recipe print)</li>
+      <li><strong>💾 Recipes PDF</strong> — saves all recipes to a PDF file</li>
+      <li><strong>🛒 Print List</strong> — prints a merged, alphabetically-sorted shopping list of all meals' ingredients</li>
+      <li><strong>💾 Shopping PDF</strong> — saves the merged shopping list to a PDF file</li>
+    </ul>
+    <h4>Notes</h4>
+    <ul>
+      <li>Duplicate recipes shared by multiple meals are only printed once</li>
+      <li>Groups are saved permanently — they persist across app restarts</li>
+      <li>Groups are per-cookbook — switching cookbooks shows that cookbook's groups</li>
+    </ul>
+    <div class="help-tip">💡 Great for batch cooking, dinner party planning, or weekly meal prep — one group, one shopping list, one PDF.</div>`,
+
+  shopping: `<h3>🛒 Shopping List</h3>
+    <p>The Shopping List automatically combines ingredients from one or more recipes or meals — scaling quantities to your desired servings.</p>
+    <h4>Adding to the list</h4>
+    <ul>
+      <li>Go to the <strong>Shopping List</strong> tab</li>
+      <li>Search for a recipe or meal by name</li>
+      <li>Set the <strong>servings</strong> you want, then click <strong>Add to List</strong></li>
+      <li>Ingredients are merged — if two recipes both need flour, the amounts are combined</li>
+    </ul>
+    <h4>Managing the list</h4>
+    <ul>
+      <li>Check off items as you shop — they grey out to show they're done</li>
+      <li>Click <strong>✕</strong> to remove an individual item</li>
+      <li>Click <strong>Clear All</strong> to start fresh (a confirmation dialog will appear)</li>
+    </ul>
+    <h4>Printing &amp; saving</h4>
+    <ul>
+      <li>Click <strong>🖨 Print List</strong> to print a clean, formatted shopping list</li>
+      <li>Click <strong>💾 Save PDF</strong> to export the shopping list directly to a PDF file</li>
+    </ul>
+    <div class="help-tip">💡 To combine multiple meals into one shopping list without adding them individually, use the <strong>Group Meal</strong> tab instead.</div>`,
+
+  print: `<h3>🖨️ Printing &amp; PDF Export</h3>
+    <h4>Print / Save PDF — single recipe</h4>
+    <ul>
+      <li>Open a recipe and click <strong>🖨 Print</strong> to open the system print dialog</li>
+      <li>Click <strong>💾 Save PDF</strong> to export the recipe directly to a PDF file (choose where to save it)</li>
+      <li>If you've scaled the servings, the scaled amounts are used</li>
+      <li>The output is clean — no buttons, no sidebar, just the recipe in a two-column ingredient layout</li>
+    </ul>
+    <h4>Print / Save PDF — a meal's recipes</h4>
+    <ul>
+      <li>Open a meal and click <strong>🖨 Print All Recipes</strong> or <strong>💾 Save Recipes PDF</strong></li>
+      <li>Every recipe in the meal is included, one per page, using the same clean format</li>
+    </ul>
+    <h4>Print / Save PDF — shopping list</h4>
+    <ul>
+      <li>Go to the Shopping List tab and click <strong>🖨 Print List</strong> or <strong>💾 Save PDF</strong></li>
+    </ul>
+    <h4>Group Meal — print or save everything at once</h4>
+    <ul>
+      <li>Use the <strong>Group Meal</strong> tab to combine multiple meals</li>
+      <li>Print or save all recipes and a merged shopping list in one click</li>
+    </ul>
+    <div class="help-tip">💡 PDF files are saved using Microsoft Edge's built-in PDF engine — no extra software needed. Make sure Edge is installed (it comes with Windows 10/11).</div>`,
+
+  settings: `<h3>⚙️ Settings</h3>
+    <p>Access settings via the <strong>⚙ Settings</strong> button in the top menu bar.</p>
+    <h4>Appearance</h4>
+    <ul>
+      <li><strong>Dark Mode</strong> — toggle between light and dark themes</li>
+      <li><strong>Font Size</strong> — enter a size from 10–28px; all text scales proportionally</li>
+      <li><strong>Accent Color</strong> — change the red/primary colour used throughout the app. Choose from presets or use the colour picker for any colour</li>
+      <li><strong>Text Color</strong> — change the main text colour (light mode only)</li>
+    </ul>
+    <h4>File</h4>
+    <ul>
+      <li><strong>File → Open Cookbooks Folder</strong> — opens the folder where all your cookbook files are stored in your file explorer</li>
+      <li><strong>File → Cookbook File Location</strong> — shows the full path of the currently active cookbook file</li>
+    </ul>
+    <div class="help-tip">💡 All settings are saved automatically and restored next time you open the app.</div>`,
+
+  about: `<h3>ℹ️ About Macleay Recipe Manager</h3>
+    <div style="text-align:center;padding:1rem 0">
+      <div style="font-size:2.5rem;margin-bottom:0.4rem">🍴</div>
+      <div style="font-size:1.1rem;font-weight:800;margin-bottom:0.2rem">Macleay Recipe Manager</div>
+      <div style="font-size:0.85rem;color:var(--muted)">Version 1.0 &nbsp;·&nbsp; Built with Flask &amp; pywebview</div>
+    </div>
+    <h4>What it is</h4>
+    <p>A fully offline desktop recipe management app. All your data is stored locally in <em>.cookbook</em> files — nothing is sent to the cloud.</p>
+    <h4>Features</h4>
+    <ul>
+      <li>Scrape recipes from hundreds of websites automatically</li>
+      <li>Organize recipes into cookbooks and categories</li>
+      <li>Plan meals and combine them into group meals</li>
+      <li>Generate shopping lists with automatic ingredient merging</li>
+      <li>Print or export any recipe, meal, or shopping list to PDF</li>
+    </ul>
+    <h4>Built with</h4>
+    <ul>
+      <li><strong>Flask</strong> — Python web framework (backend)</li>
+      <li><strong>pywebview</strong> — wraps the app in a native desktop window</li>
+      <li><strong>recipe-scrapers</strong> — parses recipe data from hundreds of websites</li>
+      <li><strong>SQLite</strong> — local database engine for each cookbook file</li>
+    </ul>
+    <h4>Data &amp; Privacy</h4>
+    <p>All recipes, photos, and settings are stored entirely on your computer. No account, no internet connection needed (except when scraping a new recipe URL).</p>`,
+};
+
+let _helpActiveTopic = "scrape";
+
+function showHelpPanel(topic) {
+  document.getElementById("help-modal-backdrop").hidden = false;
+  _renderHelp(topic || _helpActiveTopic);
+}
+function showAboutPanel() { showHelpPanel("about"); }
+
+function _renderHelp(topicId) {
+  _helpActiveTopic = topicId;
+  // Sidebar
+  const sidebar = document.getElementById("help-sidebar");
+  sidebar.innerHTML = HELP_TOPICS.map(t =>
+    `<button class="help-sidebar-btn${t.id === topicId ? " active" : ""}" onclick="_renderHelp('${t.id}')">${t.icon} ${t.label}</button>`
+  ).join("");
+  // Content
+  const helpContent = document.getElementById("help-content");
+  helpContent.innerHTML = HELP_CONTENT[topicId] || "<p>No content yet.</p>";
+  helpContent.scrollTop = 0;
+}
+function closeHelpPanel(e) {
+  if (!e || e.target === document.getElementById("help-modal-backdrop"))
+    document.getElementById("help-modal-backdrop").hidden = true;
+}
+
+// ══════════════════════════════════════════════════════════════
+// File / Cookbook
+// ══════════════════════════════════════════════════════════════
+async function loadCookbookInfo() {
+  try {
+    const data = await (await fetch("/file/current")).json();
+    document.getElementById("cookbook-name-display").textContent = data.name || "My Cookbook";
+    const pathEl = document.getElementById("setting-db-path");
+    if (pathEl) pathEl.textContent = data.path || "—";
+    const container = document.getElementById("recent-menu-items");
+    if (container) {
+      const files = (data.recentFiles || []).slice(0, 6);
+      if (files.length) {
+        container.innerHTML = files.map(p => {
+          const n = p.replace(/\\/g,"/").split("/").pop().replace(/\.cookbook$/i,"");
+          return `<button onclick="menuAction(()=>openRecentFile(${JSON.stringify(p)}))">${n}</button>`;
+        }).join("");
+      } else {
+        container.innerHTML = `<div style="padding:0.4rem 1rem;font-size:0.82rem;color:var(--muted)">No recent files</div>`;
+      }
+    }
+  } catch {}
+}
+async function reloadAll() {
+  await loadCookbookInfo();
+  await loadSavedRecipes();
+  updateSavedCount();
+  updateShoppingCount();
+  shoppingList = [];
+  renderShoppingList();
+  initCookbooksTab();
+}
+async function openRecentFile(path) {
+  const res = await fetch("/file/open", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({path}) });
+  if (res.ok) { await reloadAll(); showToast("Cookbook opened"); }
+  else { showAlert("Could not open that file. It may have been moved or deleted."); }
+}
+async function fileNew() {
+  const name = await showPrompt("New cookbook name:", "My New Cookbook");
+  if (!name) return;
+  let path;
+  if (window.pywebview) {
+    path = await window.pywebview.api.save_file_dialog(name.replace(/[^\w\s-]/g,"").trim() || "cookbook");
+  } else {
+    path = await showPrompt("Enter the full path for the new cookbook file:", name + ".cookbook");
+  }
+  if (!path) return;
+  const res = await fetch("/file/new", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({path}) });
+  if (res.ok) {
+    await saveSetting("cookbookName", name);
+    savedRecipes = []; savedMeals = [];
+    await reloadAll();
+    showToast("New cookbook created!");
+  } else { showAlert("Could not create cookbook."); }
+}
+async function fileOpen() {
+  let path;
+  if (window.pywebview) {
+    path = await window.pywebview.api.open_file_dialog();
+  } else {
+    path = await showPrompt("Enter the full path to the cookbook file:");
+  }
+  if (!path) return;
+  const res = await fetch("/file/open", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({path}) });
+  if (res.ok) { await reloadAll(); showToast("Cookbook opened!"); }
+  else { showAlert("Could not open that file."); }
+}
+async function fileSaveAs() {
+  const name = (appSettings.cookbookName || document.getElementById("cookbook-name-display").textContent || "cookbook").trim();
+  let path;
+  if (window.pywebview) {
+    path = await window.pywebview.api.save_file_dialog(name);
+  } else {
+    path = await showPrompt("Save cookbook as (full path):", name + ".cookbook");
+  }
+  if (!path) return;
+  const res = await fetch("/file/save-as", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({path}) });
+  if (res.ok) { showToast("Cookbook saved!"); loadCookbookInfo(); }
+  else { showAlert("Could not save cookbook."); }
+}
+function fileExit() {
+  if (window.pywebview) { window.pywebview.api.exit_app(); }
+  else { window.close(); }
+}
+
+// ── Custom title bar (pywebview frameless) ──────────────────
+function tbApi(method) {
+  // pywebview API is injected asynchronously — retry a few times if not ready yet
+  if (window.pywebview && window.pywebview.api && window.pywebview.api[method]) {
+    window.pywebview.api[method]();
+  } else {
+    let attempts = 0;
+    const t = setInterval(() => {
+      attempts++;
+      if (window.pywebview && window.pywebview.api && window.pywebview.api[method]) {
+        window.pywebview.api[method]();
+        clearInterval(t);
+      } else if (attempts > 20) {
+        clearInterval(t);
+      }
+    }, 100);
+  }
+}
+// Update max/restore button tooltip on resize
+window.addEventListener("resize", () => {
+  const btn = document.getElementById("tb-max-btn");
+  if (btn) btn.textContent = (window.outerWidth >= screen.availWidth - 4) ? "\u2750" : "\u25A1";
+});
+
+// ══════════════════════════════════════════════════════════════
+// Cookbooks tab
+// ══════════════════════════════════════════════════════════════
+let savedCookbooks = [];
+
+async function initCookbooksTab() {
+  const res = await fetch("/cookbooks");
+  savedCookbooks = await res.json();
+  renderCookbooksGrid();
+  updateCookbooksCount();
+}
+
+function updateCookbooksCount() {
+  const el = document.getElementById("cookbooks-count");
+  if (el) el.textContent = savedCookbooks.length ? `(${savedCookbooks.length})` : "";
+}
+
+function renderCookbooksGrid() {
+  const grid = document.getElementById("cookbook-grid");
+  if (!grid) return;
+  if (!savedCookbooks.length) {
+    grid.innerHTML = `<div class="empty-state"><div class="big-icon">📚</div><p>No cookbooks yet.</p></div>`;
+    return;
+  }
+  // Use indices in onclick to avoid JSON quote-in-attribute issues
+  grid.innerHTML = savedCookbooks.map((cb, i) => {
+    const exportBtn   = `<button class="cb-action-btn" title="Export as CSV" onclick="exportCookbook(${i})">📤</button>`;
+    const rename      = `<button class="cb-action-btn" title="Rename" onclick="renameCookbook(${i})">✏️</button>`;
+    const del         = `<button class="cb-action-btn" title="Delete" onclick="deleteCookbook(${i})">🗑️</button>`;
+    const defBadge    = cb.isDefault  ? `<span class="cb-badge-default">Default</span>` : "";
+    const activeBadge = cb.isActive   ? `<span class="cb-badge-active">✓ Active</span>`  : "";
+    return `<div class="cookbook-card${cb.isActive ? " active-cookbook" : ""}" onclick="switchCookbook(${i})">
+        <div class="cookbook-card-actions" onclick="event.stopPropagation()">${exportBtn}${rename}${del}</div>
+        <div class="cookbook-card-icon">📖</div>
+        <div class="cookbook-card-name">${cb.name}</div>
+        <div class="cookbook-card-meta">${cb.recipeCount} recipe${cb.recipeCount !== 1 ? "s" : ""}</div>
+        <div class="cookbook-card-badges">${defBadge}${activeBadge}</div>
+      </div>`;
+  }).join("");
+}
+
+async function switchCookbook(i) {
+  const cb  = savedCookbooks[i];
+  if (!cb) return;
+  const res = await fetch("/cookbooks/switch", {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({path: cb.path})
+  });
+  if (!res.ok) { showAlert("Could not switch cookbook."); return; }
+  savedCookbooks.forEach(c => c.isActive = (c.path === cb.path));
+  renderCookbooksGrid();
+  savedRecipes = []; savedMeals = [];
+  await loadSavedRecipes();
+  updateSavedCount();
+  updateShoppingCount();
+  document.getElementById("cookbook-name-display").textContent = cb.name;
+  showToast(`Switched to "${cb.name}"`);
+}
+
+async function createCookbook() {
+  const name = await showPrompt("New cookbook name:", "");
+  if (!name || !name.trim()) return;
+  const res = await fetch("/cookbooks", {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({name: name.trim()})
+  });
+  const data = await res.json();
+  if (!res.ok) { showAlert(data.error || "Could not create cookbook."); return; }
+  await switchCookbook(data.path, data.name);
+  await initCookbooksTab();
+  showToast(`"${data.name}" created and activated!`);
+}
+
+async function renameCookbook(i) {
+  const cb = savedCookbooks[i];
+  if (!cb) return;
+  const newName = await showPrompt("Rename cookbook:", cb.name);
+  if (!newName || !newName.trim() || newName.trim() === cb.name) return;
+  const res = await fetch("/cookbooks/rename", {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({oldName: cb.name, newName: newName.trim()})
+  });
+  const data = await res.json();
+  if (!res.ok) { showAlert(data.error || "Could not rename cookbook."); return; }
+  await initCookbooksTab();
+  document.getElementById("cookbook-name-display").textContent =
+    savedCookbooks.find(cb => cb.isActive)?.name || "My Cookbook";
+  showToast("Cookbook renamed");
+}
+
+async function deleteCookbook(i) {
+  const cb = savedCookbooks[i];
+  if (!cb) return;
+  if (savedCookbooks.length <= 1) { showAlert("You must have at least one cookbook."); return; }
+  if (!await showConfirm(`Delete "${cb.name}"? All its recipes will be lost.`)) return;
+  const res = await fetch("/cookbooks/delete", {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({name: cb.name})
+  });
+  const data = await res.json();
+  if (!res.ok) { showAlert(data.error || "Could not delete cookbook."); return; }
+  await initCookbooksTab();
+  const active = savedCookbooks.find(cb => cb.isActive);
+  if (active) {
+    savedRecipes = []; savedMeals = [];
+    await loadSavedRecipes();
+    updateSavedCount();
+    document.getElementById("cookbook-name-display").textContent = active.name;
+  }
+  showToast("Cookbook deleted");
+}
+
+// ── Import Cookbook ───────────────────────────────────────────
+let _importFilePath = null;
+
+function closeImportModal(e) {
+  if (!e || e.target === document.getElementById("import-modal-backdrop")) {
+    document.getElementById("import-modal-backdrop").hidden = true;
+    _importFilePath = null;
+    // Reset back to choose step
+    document.getElementById("import-choose-step").hidden = false;
+    document.getElementById("import-preview-box").hidden = true;
+    document.getElementById("import-name-wrap").hidden = true;
+    document.getElementById("import-confirm-btn").hidden = true;
+    document.getElementById("import-status").textContent = "";
+  }
+}
+
+// Open the modal synchronously — no async, no await, preserves user gesture
+function importCookbook() {
+  document.getElementById("import-modal-backdrop").hidden = false;
+  document.getElementById("import-choose-step").hidden = false;
+  document.getElementById("import-preview-box").hidden = true;
+  document.getElementById("import-name-wrap").hidden = true;
+  document.getElementById("import-confirm-btn").hidden = true;
+  document.getElementById("import-status").textContent = "";
+  _importFilePath = null;
+}
+
+// Called by the Browse button inside the modal — direct user gesture
+async function browseImportFile(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.import_file_dialog) {
+    // pywebview native OS file picker
+    document.getElementById("import-status").textContent = "Opening file picker…";
+    let path;
+    try { path = await window.pywebview.api.import_file_dialog(); } catch(err) { path = null; }
+    document.getElementById("import-status").textContent = "";
+    if (!path) return;
+    await _peekAndPreview(path, path.replace(/\\/g, "/").split("/").pop());
+  }
+  // If NOT pywebview, the <input type="file"> inside the same <label> fires naturally
+  // via the label click — no JS needed, no gesture lost
+}
+
+// Shared: call /peek and populate the preview step
+async function _peekAndPreview(path, filename) {
+  document.getElementById("import-status").textContent = "Reading file…";
+  const res  = await fetch("/cookbooks/peek", {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({path})
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    document.getElementById("import-status").textContent = "⚠ " + (data.error || "Could not read file.");
+    return;
+  }
+  _importFilePath = path;
+  const typeBadge = data.type === "csv_rm"
+    ? `<span class="import-type-badge import-type-cookbook">Macleay Recipe Manager CSV</span>`
+    : data.type === "csv"
+    ? `<span class="import-type-badge import-type-csv">AccuChef CSV</span>`
+    : `<span class="import-type-badge import-type-cookbook">Macleay Recipe Manager</span>`;
+  document.getElementById("import-choose-step").hidden = true;
+  document.getElementById("import-preview-box").innerHTML =
+    `${typeBadge} &nbsp;<strong>${filename}</strong><br><strong>Recipes found:</strong> ${data.recipeCount}`;
+  document.getElementById("import-preview-box").hidden = false;
+  document.getElementById("import-name-input").value = data.suggestedName || "";
+  document.getElementById("import-name-wrap").hidden = false;
+  document.getElementById("import-confirm-btn").hidden = false;
+  document.getElementById("import-status").textContent = "";
+}
+
+// Called when user picks a file via the HTML <input type="file">
+async function handleImportFileSelect(input) {
+  const file = input.files[0];
+  input.value = "";
+  if (!file) return;
+  document.getElementById("import-status").textContent = "Reading file…";
+  const formData = new FormData();
+  formData.append("file", file);
+  const res  = await fetch("/cookbooks/upload-temp", { method: "POST", body: formData });
+  const data = await res.json();
+  if (!res.ok) {
+    document.getElementById("import-status").textContent = "⚠ " + (data.error || "Could not read file.");
+    return;
+  }
+  await _peekAndPreview(data.tempPath, file.name);
+}
+
+async function confirmImport() {
+  const name = (document.getElementById("import-name-input").value || "").trim();
+  if (!name) { document.getElementById("import-status").textContent = "Please enter a cookbook name."; return; }
+  if (!_importFilePath) return;
+
+  document.getElementById("import-confirm-btn").disabled = true;
+  document.getElementById("import-status").textContent = "Importing…";
+
+  const res  = await fetch("/cookbooks/import", {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({path: _importFilePath, name})
+  });
+  const data = await res.json();
+  document.getElementById("import-confirm-btn").disabled = false;
+
+  if (!res.ok) { document.getElementById("import-status").textContent = "⚠ " + (data.error || "Import failed."); return; }
+
+  closeImportModal();
+  await initCookbooksTab();
+  showToast(`✓ Imported "${data.name}" — ${data.recipeCount} recipe${data.recipeCount !== 1 ? "s" : ""}`);
+}
+
+// ── Export cookbook as CSV ────────────────────────────────────
+async function exportCookbook(i) {
+  const cb = savedCookbooks[i];
+  if (!cb) return;
+  const res  = await fetch("/cookbooks/export", {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({name: cb.name})
+  });
+  const data = await res.json();
+  if (!res.ok) { showAlert(data.error || "Export failed."); return; }
+  showToast(`✓ Saved to ${data.path}`);
+}
+
+// ── Open cookbooks folder ─────────────────────────────────────
+async function openCookbooksFolder() {
+  const res = await fetch("/open-folder", { method: "POST" });
+  if (!res.ok) { showAlert("Could not open the folder."); }
+}
+
+
+loadAppSettings();
+loadCookbookInfo();
 updateSavedCount();
 updateShoppingCount();
+
+// ── Modal scroll-lock: whenever any backdrop becomes visible/hidden,
+//    lock or unlock body scrolling automatically ──────────────────
+(function setupModalScrollLock() {
+  function syncScroll() {
+    const anyOpen = [...document.querySelectorAll('.img-modal-backdrop')].some(el => !el.hidden);
+    document.body.style.overflow = anyOpen ? 'hidden' : '';
+  }
+  const obs = new MutationObserver(syncScroll);
+  document.querySelectorAll('.img-modal-backdrop').forEach(el =>
+    obs.observe(el, { attributes: true, attributeFilter: ['hidden'] })
+  );
+})();
 
 // ══════════════════════════════════════════════════════════════
 // Meals
@@ -1283,31 +3081,52 @@ async function loadMeals() {
   } catch {}
 }
 
+window._renderMealsGrid = renderMealGrid; // expose for applySettings
 function renderMealGrid() {
-  const grid = document.getElementById("meal-grid");
-  if (!grid) return;
+  const container = document.getElementById("meal-grid");
+  if (!container) return;
   if (!savedMeals.length) {
-    grid.innerHTML = `<div class="empty-state"><div class="big-icon">🍽️</div><p>No meals yet.<br>Create one to group recipes together.</p></div>`;
+    container.className = "recipe-grid";
+    container.innerHTML = `<div class="empty-state"><div class="big-icon">🍽️</div><p>No meals yet.<br>Create one to group recipes together.</p></div>`;
     return;
   }
-  grid.innerHTML = savedMeals.map(m => {
-    const thumb = m.recipes.find(r => r.image);
-    const thumbHtml = thumb
-      ? `<img src="${esc(thumb.image)}" alt="${esc(m.name)}" style="width:100%;height:150px;object-fit:cover;display:block"/>`
-      : `<div class="grid-card-img-placeholder">🍽️</div>`;
-    const badges = m.recipes.slice(0,3).map(r => `<span class="grid-cat-badge">${esc(r.title)}</span>`).join(" ");
-    const more = m.recipes.length > 3 ? ` <span class="grid-cat-badge">+${m.recipes.length-3} more</span>` : "";
-    return `<div class="grid-card" onclick="openMeal(${m.id})">
-      <button class="grid-card-del" onclick="deleteMealById(${m.id},event)" title="Delete">✕</button>
-      ${thumbHtml}
-      <div class="grid-card-body">
-        <div class="grid-card-title">${esc(m.name)}</div>
-        ${m.category ? `<div><span class="grid-cat-badge">${esc(m.category)}</span></div>` : ""}
-        <div class="grid-card-meta">${m.recipes.length} recipe${m.recipes.length===1?"":"s"}</div>
-        <div class="meal-card-recipes">${badges}${more}</div>
-      </div>
-    </div>`;
-  }).join("");
+  const mode = appSettings.viewMode || "grid";
+  if (mode === "list") {
+    container.className = "list-view";
+    container.innerHTML = savedMeals.map(m => {
+      const thumb = m.recipes.find(r => r.image);
+      const cats = (m.categories && m.categories.length ? m.categories : (m.category ? [m.category] : []));
+      const meta = [`${m.recipes.length} recipe${m.recipes.length===1?"":"s"}`, cats.join(", ")].filter(Boolean).join(" · ");
+      return `<div class="list-card" onclick="openMeal(${m.id})">
+        ${thumb ? `<img class="list-thumb" src="${esc(thumb.image)}"/>` : `<div class="list-thumb-ph">🍽️</div>`}
+        <div class="list-info">
+          <div class="list-title">${esc(m.name)}</div>
+          ${meta ? `<div class="list-meta">${esc(meta)}</div>` : ""}
+        </div>
+        <button class="list-del" onclick="deleteMealById(${m.id},event)" title="Delete">✕</button>
+      </div>`;
+    }).join("");
+  } else {
+    container.className = "recipe-grid";
+    container.innerHTML = savedMeals.map(m => {
+      const thumb = m.recipes.find(r => r.image);
+      const thumbHtml = thumb
+        ? `<img src="${esc(thumb.image)}" alt="${esc(m.name)}" style="width:100%;height:150px;object-fit:cover;display:block"/>`
+        : `<div class="grid-card-img-placeholder">🍽️</div>`;
+      const badges = m.recipes.slice(0,3).map(r => `<span class="grid-cat-badge">${esc(r.title)}</span>`).join(" ");
+      const more = m.recipes.length > 3 ? ` <span class="grid-cat-badge">+${m.recipes.length-3} more</span>` : "";
+      return `<div class="grid-card" onclick="openMeal(${m.id})">
+        <button class="grid-card-del" onclick="deleteMealById(${m.id},event)" title="Delete">✕</button>
+        ${thumbHtml}
+        <div class="grid-card-body">
+          <div class="grid-card-title">${esc(m.name)}</div>
+          ${(m.categories && m.categories.length ? m.categories : (m.category ? [m.category] : [])).length ? `<div style="display:flex;flex-wrap:wrap;gap:0.2rem;margin-top:0.2rem">${(m.categories && m.categories.length ? m.categories : [m.category]).map(c=>`<span class="grid-cat-badge">${esc(c)}</span>`).join("")}</div>` : ""}
+          <div class="grid-card-meta">${m.recipes.length} recipe${m.recipes.length===1?"":"s"}</div>
+          <div class="meal-card-recipes">${badges}${more}</div>
+        </div>
+      </div>`;
+    }).join("");
+  }
 }
 
 function openMeal(id) {
@@ -1331,19 +3150,30 @@ function renderMealDetail() {
   const inMealIds = new Set(m.recipes.map(r => r.id));
   const available = savedRecipes.filter(r => !inMealIds.has(r.id));
 
+  const dsVal = m.default_servings != null ? m.default_servings : "";
   const recipeRows = m.recipes.length === 0
     ? `<p style="color:var(--muted);font-size:0.9rem;padding:0.5rem 0">No recipes yet. Add some below.</p>`
-    : m.recipes.map(r => `
-        <div class="meal-recipe-row">
+    : m.recipes.map(r => {
+        const defPlaceholder = m.default_servings != null ? `Default (${m.default_servings})` : "Servings…";
+        const curSrv = r.recipe_servings != null ? r.recipe_servings : "";
+        return `
+        <div class="meal-recipe-row gm-meal-block" style="display:flex;align-items:center;gap:0.5rem;padding:0.45rem 0.6rem;border-radius:8px;border:1px solid var(--border)">
           ${r.image
-            ? `<img src="${esc(r.image)}" class="meal-recipe-thumb"/>`
-            : `<div class="meal-recipe-thumb meal-recipe-thumb-placeholder">🍽️</div>`}
-          <div class="meal-recipe-info">
+            ? `<img src="${esc(r.image)}" class="meal-recipe-thumb" style="flex-shrink:0"/>`
+            : `<div class="meal-recipe-thumb meal-recipe-thumb-placeholder" style="flex-shrink:0">🍽️</div>`}
+          <div class="meal-recipe-info" style="flex:1;min-width:0">
             <div class="meal-recipe-title">${esc(r.title)}</div>
             <div class="meal-recipe-meta">${esc(r.servings||"")}</div>
           </div>
-          <button class="del-btn" style="font-size:1rem;padding:0 4px" onclick="removeRecipeFromMeal(${r.id})">✕</button>
-        </div>`).join("");
+          <input type="number" min="0.5" step="0.5" value="${curSrv}"
+            placeholder="${defPlaceholder}"
+            title="Override servings for this recipe"
+            style="width:100px;padding:0.22rem 0.4rem;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:0.8rem;flex-shrink:0"
+            onchange="setMealRecipeServings(${r.id},this.value)"
+            oninput="setMealRecipeServings(${r.id},this.value)"/>
+          <button class="del-btn" style="font-size:1rem;padding:0 4px;flex-shrink:0" onclick="removeRecipeFromMeal(${r.id})">✕</button>
+        </div>`;
+      }).join("");
 
   const addRow = available.length ? `
     <div style="margin-top:0.9rem">
@@ -1356,19 +3186,32 @@ function renderMealDetail() {
 
   content.innerHTML = `
     <div class="recipe-card"><div class="card-body">
-      <div class="editable-title" onclick="inlineMealName(this)" title="Click to edit name">${esc(m.name)}</div>
-      <div class="meta" style="margin-bottom:0">
-        <div class="meta-item">🏷️
-          <span class="editable-span" onclick="inlineEditMealCategory(this)" title="Click to edit category">${esc(m.category||"Add category…")}</span>
+      <div class="recipe-toolbar">
+        <div class="recipe-toolbar-left"></div>
+        <div class="recipe-toolbar-right">
+          <button class="btn btn-ghost" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="printMeal()">🖨 Print All</button>
+          <button class="btn btn-dark" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="exportMealPdf()">💾 Save PDF</button>
+          <button class="btn btn-danger" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="deleteMealById(${m.id},null,true)">🗑 Delete</button>
         </div>
       </div>
-      <div class="section-title" style="margin-top:1.2rem">Recipes</div>
-      <div id="meal-recipe-list">${recipeRows}</div>
-      ${addRow}
-      <div class="btn-row" style="margin-top:1.5rem">
-        <button class="btn btn-danger" onclick="deleteMealById(${m.id},null,true)">Delete Meal</button>
+      <div class="editable-title" onclick="inlineMealName(this)" title="Click to edit name">${esc(m.name)}</div>
+      <div class="meta" style="margin-bottom:0">
+        <div class="meta-item" style="align-items:flex-start">🏷️
+          <div>${buildCategoryTagsHTML("meal", m.categories && m.categories.length ? m.categories : (m.category ? [m.category] : []))}</div>
+        </div>
       </div>
-      <p style="font-size:0.78rem;color:var(--muted);margin-top:0.6rem">Click the meal name to edit it</p>
+      <div style="display:flex;align-items:center;gap:0.6rem;margin-top:0.8rem;margin-bottom:0.3rem">
+        <label style="font-size:0.85rem;color:var(--muted);white-space:nowrap">Default servings for all recipes:</label>
+        <input type="number" min="0.5" step="0.5" id="meal-default-servings"
+          style="width:80px;padding:0.25rem 0.4rem;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:0.85rem"
+          placeholder="e.g. 4" value="${dsVal}"
+          title="Sets a default serving size for all recipes (can be overridden per recipe)"
+          onchange="updateMealDefaultServings(this.value)"/>
+        <span style="font-size:0.78rem;color:var(--muted)">Override per recipe below ↓</span>
+      </div>
+      <div class="section-title" style="margin-top:1rem">Recipes</div>
+      <div id="meal-recipe-list" class="detail-scroll-list">${recipeRows}</div>
+      ${addRow}
     </div></div>`;
   // Render the recipe browser after the HTML is set
   if (available.length) renderMealRecipeBrowser();
@@ -1409,6 +3252,7 @@ async function addRecipeToMealById(rid) {
   if (!selectedMeal) return;
   const recipe = savedRecipes.find(r => r.id === rid);
   if (!recipe) return;
+  const searchVal = document.getElementById("meal-recipe-search")?.value || "";
   await fetch(`/meals/${selectedMeal.id}/recipes`, {
     method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({recipe_id:rid})
   });
@@ -1417,6 +3261,8 @@ async function addRecipeToMealById(rid) {
   if (idx !== -1) savedMeals[idx] = {...selectedMeal, recipes:[...selectedMeal.recipes]};
   updateMealsCount();
   renderMealDetail();
+  const inp = document.getElementById("meal-recipe-search");
+  if (inp && searchVal) { inp.value = searchVal; renderMealRecipeBrowser(); }
   showToast();
 }
 
@@ -1436,18 +3282,7 @@ function inlineMealName(el) {
 }
 
 
-function inlineEditMealCategory(el) {
-  makeInlineInput(el, selectedMeal.category || "", async val => {
-    selectedMeal.category = val || null;
-    await fetch(`/meals/${selectedMeal.id}`, {
-      method:"PUT", headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({name:selectedMeal.name, category:selectedMeal.category})
-    });
-    const idx = savedMeals.findIndex(m => m.id === selectedMeal.id);
-    if (idx !== -1) savedMeals[idx].category = selectedMeal.category;
-    showToast(); renderMealDetail();
-  }, {cls:"meta-input"});
-}
+// inlineEditMealCategory is superseded by the tag editor (addCategoryInput/removeCategory)
 
 async function removeRecipeFromMeal(rid) {
   await fetch(`/meals/${selectedMeal.id}/recipes/${rid}`, {method:"DELETE"});
@@ -1457,8 +3292,47 @@ async function removeRecipeFromMeal(rid) {
   renderMealDetail();
 }
 
+let _mealRecipeServingsTimer = {};
+async function setMealRecipeServings(rid, val) {
+  const m = selectedMeal;
+  if (!m) return;
+  const srv = val && parseFloat(val) > 0 ? parseFloat(val) : null;
+  const rec = m.recipes.find(r => r.id === rid);
+  if (rec) rec.recipe_servings = srv;
+  const idx = savedMeals.findIndex(x => x.id === m.id);
+  if (idx !== -1) savedMeals[idx] = {...m, recipes:[...m.recipes]};
+  clearTimeout(_mealRecipeServingsTimer[rid]);
+  _mealRecipeServingsTimer[rid] = setTimeout(async () => {
+    await fetch(`/meals/${m.id}/recipes/${rid}/servings`, {
+      method:"PUT", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({servings: srv})
+    });
+  }, 400);
+}
+
+async function updateMealDefaultServings(val) {
+  const m = selectedMeal;
+  if (!m) return;
+  const ds = val && parseFloat(val) > 0 ? parseFloat(val) : null;
+  m.default_servings = ds;
+  const idx = savedMeals.findIndex(x => x.id === m.id);
+  if (idx !== -1) savedMeals[idx].default_servings = ds;
+  await fetch(`/meals/${m.id}`, {
+    method:"PUT", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({name: m.name, default_servings: ds,
+      categories: m.categories||[], category: m.category||null})
+  });
+  // Update placeholder text on per-recipe inputs without full re-render
+  m.recipes.forEach(r => {
+    if (r.recipe_servings == null) {
+      const inputs = document.querySelectorAll(`#meal-recipe-list input[type=number]`);
+      inputs.forEach(inp => { if (!inp.value) inp.placeholder = ds != null ? `Default (${ds})` : "Servings…"; });
+    }
+  });
+}
+
 async function createMeal() {
-  const name = prompt("Meal name:", "New Meal");
+  const name = await showPrompt("Meal name:", "New Meal");
   if (!name) return;
   const res = await fetch("/meals", {
     method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({name})
@@ -1474,7 +3348,7 @@ async function createMeal() {
 async function deleteMealById(id, e, fromDetail=false) {
   if (e) e.stopPropagation();
   const m = savedMeals.find(m => m.id === id);
-  if (!m || !confirm(`Delete "${m.name}"?`)) return;
+  if (!m || !await showConfirm(`Delete "${m.name}"?`)) return;
   await fetch(`/meals/${id}`, {method:"DELETE"});
   savedMeals = savedMeals.filter(m => m.id !== id);
   updateMealsCount();
@@ -1499,7 +3373,7 @@ function renderShopBrowser() {
   if (q) items = items.filter(i =>
     i.title.toLowerCase().includes(q) ||
     i.meta.toLowerCase().includes(q) ||
-    i.category.toLowerCase().includes(q)
+    (i.categories && i.categories.length ? i.categories : (i.category ? [i.category] : [])).join(" ").toLowerCase().includes(q)
   );
 
   switch(sort) {
@@ -1557,7 +3431,7 @@ function closeShopAddModal(e) {
 async function confirmShopAdd() {
   if (!shopAddTarget) return;
   const servings = parseFloat(document.getElementById("shop-add-servings").value);
-  if (!servings || servings<=0) { alert("Please enter a valid serving count."); return; }
+  if (!servings || servings<=0) { showAlert("Please enter a valid serving count."); return; }
 
   if (!savedRecipes.length) {
     try { savedRecipes = await (await fetch("/recipes")).json(); } catch {}
@@ -1614,8 +3488,9 @@ function removeFromShoppingList(idx) {
   renderShoppingList();
 }
 
-function clearShoppingList() {
-  if (!confirm("Clear the entire shopping list?")) return;
+async function clearShoppingList() {
+  const ok = await showConfirm("Clear the entire shopping list?", "Clear");
+  if (!ok) return;
   shoppingList = [];
   saveShoppingListToStorage();
   updateShoppingCount();
@@ -1652,7 +3527,7 @@ function renderShoppingList() {
 function parseIngForCombine(text) {
   text = text.replace(/^[\u25A1\u25A2\u25FB\u25FC\u2610\u2611\u2612\u2713\u2714\s]+/, '').trim();
   const NP = '(?:(?:\\d+\\s+)?\\d+\\/\\d+|\\d+(?:\\.\\d+)?)';
-  const UL = 'tsps?|teaspoons?|tbsps?|tablespoons?|fl\\.?\\s*oz|cups?|pints?|pt|quarts?|qt|gallons?|gal|oz|ounces?|lbs?|pounds?';
+  const UL = 'tsps?|teaspoons?|tbsps?|tbls?|tablespoons?|fl\\.?\\s*ozs?|cups?|pints?|pts?|quarts?|qts?|gallons?|gals?|ozs?|ounces?|lbs?|pounds?|kgs?|kilograms?|grams?|g(?=\\b)';
   const m = text.match(new RegExp(`^(${NP})\\s*(${UL})?[\\s]*(.+)$`, 'i'));
   if (m) {
     const qty = parseFraction(m[1]);
@@ -1722,33 +3597,585 @@ function combineIngredients(allIngredients) {
 }
 
 function printShoppingList() {
-  if (!shoppingList.length) return;
+  const html = buildShoppingHtml(shoppingList, "Shopping List");
+  if (html) doPrint(html);
+}
 
-  // Combine matching ingredients across recipes, then sort alphabetically
-  const raw = shoppingList.flatMap(e => e.ingredients);
+// ══════════════════════════════════════════════════════════════
+// PDF Export (via Edge headless through pywebview API)
+// ══════════════════════════════════════════════════════════════
+async function exportPdf(html, suggestedName) {
+  if (!window.pywebview) { showAlert("PDF export is only available in the desktop app."); return; }
+  showToast("Saving PDF…", 0);
+  const result = await window.pywebview.api.save_pdf(html, suggestedName);
+  if (result && result.ok) {
+    showToast("PDF saved!");
+  } else if (result && result.msg !== "Cancelled") {
+    showAlert("PDF export failed: " + result.msg);
+  } else {
+    showToast(""); // dismissed
+  }
+}
+
+function exportRecipePdf(ctx) {
+  const r = ctx === "scrape" ? currentScrape : selectedRecipe;
+  if (!r) return;
+  const scalerInput = document.getElementById(`scaler-${ctx}`);
+  const currentServings = scalerInput ? parseFloat(scalerInput.value) : null;
+  const origServings = r.servings_num || parseServingsNumJS(r.servings);
+  const factor = (currentServings && origServings && currentServings > 0)
+    ? currentServings / origServings : 1;
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+<title>${escP(r.title||"Recipe")}</title>
+<style>${PRINT_CSS}</style>
+</head><body>${buildRecipeBlock(r, factor)}</body></html>`;
+  exportPdf(html, r.title || "recipe");
+}
+
+function exportMealPdf() {
+  const m = selectedMeal;
+  if (!m) return;
+  const pairs = (m.recipes||[]).map(mr => {
+    const r = savedRecipes.find(r => r.id === mr.id);
+    return r ? {r, factor: _mealRecipeFactor(m, mr)} : null;
+  }).filter(Boolean);
+  if (!pairs.length) { showAlert("No recipes found."); return; }
+  const html = buildMealRecipesHtml(pairs.map(p => p.r), pairs.map(p => p.factor));
+  exportPdf(html, m.name || "meal");
+}
+
+function exportShoppingPdf() {
+  const html = buildShoppingHtml(shoppingList, "Shopping List");
+  if (!html) return;
+  exportPdf(html, "shopping-list");
+}
+
+// Shared: build a full HTML doc for a set of recipes (same format as printMeal)
+// factors: optional array of multipliers, one per recipe (defaults to 1)
+function buildMealRecipesHtml(recipes, factors) {
+  const blocks = recipes.map((r, i) => {
+    const factor = (factors && factors[i] != null) ? factors[i] : 1;
+    const block = buildRecipeBlock(r, factor);
+    return i < recipes.length - 1
+      ? `<div>${block}</div><div class="page-break"></div>`
+      : `<div>${block}</div>`;
+  }).join("");
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+<title>Recipes</title><style>${PRINT_CSS}</style></head><body>${blocks}</body></html>`;
+}
+
+// Shared: build shopping list HTML from a list of shoppingList entries
+function buildShoppingHtml(listEntries, title) {
+  if (!listEntries || !listEntries.length) return null;
+  const raw = listEntries.flatMap(e => e.ingredients);
   const combined = combineIngredients(raw);
   const stripQty = s => s.replace(/^[\d\s\/\u2013\-\.]+(?:tsp|tbsp|teaspoons?|tablespoons?|cups?|pints?|quarts?|gallons?|gal|qt|oz|ounces?|lbs?|pounds?|g|kg|ml|l)?\s*/i, "").toLowerCase();
   combined.sort((a, b) => stripQty(a).localeCompare(stripQty(b)));
-  const allIngredients = combined;
-
-  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
-<title>Shopping List</title>
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+<title>${escP(title||"Shopping List")}</title>
 <style>
-  @page { size:letter portrait; margin:0.75in 0.9in; }
+  @page {
+    size: letter portrait;
+    margin: 0.75in 0.9in;
+    @top-left { content: none; } @top-center { content: none; } @top-right { content: none; }
+    @bottom-left { content: none; } @bottom-center { content: none; } @bottom-right { content: none; }
+  }
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family:'Comic Sans MS','Chalkboard SE','Comic Sans',cursive; font-size:11pt; color:#000; }
   .title { text-align:center; font-weight:bold; font-size:14pt; margin-bottom:10pt; }
   .ing { font-size:11pt; line-height:1.55; }
 </style></head><body>
-<div class="title">Shopping List</div>
-${allIngredients.map(i => `<div class="ing">___ ${escP(i)}</div>`).join("\n")}
+<div class="title">${escP(title||"Shopping List")}</div>
+${combined.map(i => `<div class="ing">___ ${escP(i)}</div>`).join("\n")}
 </body></html>`;
+}
 
-  const w = window.open("", "_blank", "width=820,height=1060");
-  w.document.write(html);
-  w.document.close();
-  w.focus();
-  setTimeout(() => w.print(), 400);
+// ══════════════════════════════════════════════════════════════
+// Group Meal Tab  (persistent, backend-backed, list + detail)
+// ══════════════════════════════════════════════════════════════
+let savedGroupMeals = [];
+let selectedGroupMeal = null;
+
+async function initGroupMealTab() {
+  if (!savedMeals.length)   { try { savedMeals   = await (await fetch("/meals")).json();   } catch {} }
+  if (!savedRecipes.length) { try { savedRecipes  = await (await fetch("/recipes")).json(); } catch {} }
+  savedGroupMeals = await (await fetch("/group-meals")).json();
+  document.getElementById("groupmeal-list-view").hidden   = false;
+  document.getElementById("groupmeal-detail-view").hidden = true;
+  selectedGroupMeal = null;
+  renderGroupMealList();
+}
+
+function renderGroupMealList() {
+  const container = document.getElementById("groupmeal-grid");
+  if (!savedGroupMeals.length) {
+    container.className = "recipe-grid";
+    container.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:3rem 0;color:var(--muted)">No group meals yet. Click <strong>+ New Group Meal</strong> to create one.</div>`;
+    return;
+  }
+  const mode = appSettings.viewMode || "grid";
+  if (mode === "list") {
+    container.className = "list-view";
+    container.innerHTML = savedGroupMeals.map(g => {
+      const n = g.meals ? g.meals.length : 0;
+      return `<div class="list-card" onclick="openGroupMeal(${g.id})">
+        <div class="list-thumb-ph">🍴</div>
+        <div class="list-info">
+          <div class="list-title">${esc(g.name)}</div>
+          <div class="list-meta">${n} meal${n!==1?"s":""}</div>
+        </div>
+        <button class="list-del" onclick="(async(e)=>{e.stopPropagation();await deleteGroupMealById(${g.id})})(event)" title="Delete">✕</button>
+      </div>`;
+    }).join("");
+  } else {
+    container.className = "recipe-grid";
+    container.innerHTML = savedGroupMeals.map(g => {
+      const n = g.meals ? g.meals.length : 0;
+      return `<div class="grid-card" onclick="openGroupMeal(${g.id})">
+        <button class="grid-card-del" onclick="(async(e)=>{e.stopPropagation();await deleteGroupMealById(${g.id})})(event)" title="Delete">✕</button>
+        <div class="grid-card-img-placeholder">🍴</div>
+        <div class="grid-card-body">
+          <div class="grid-card-title">${esc(g.name)}</div>
+          <div class="grid-card-meta">${n} meal${n!==1?"s":""}</div>
+        </div>
+      </div>`;
+    }).join("");
+  }
+}
+
+async function createGroupMeal() {
+  const name = await showPrompt("Group meal name:", "New Group Meal");
+  if (!name) return;
+  const res = await fetch("/group-meals", {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({name})
+  });
+  const gm = await res.json();
+  savedGroupMeals.unshift(gm);
+  openGroupMeal(gm.id);
+}
+
+function openGroupMeal(gid) {
+  selectedGroupMeal = savedGroupMeals.find(g => g.id === gid);
+  if (!selectedGroupMeal) return;
+  document.getElementById("groupmeal-list-view").hidden   = true;
+  document.getElementById("groupmeal-detail-view").hidden = false;
+  renderGroupMealDetail();
+}
+
+function backToGroupMealList() {
+  selectedGroupMeal = null;
+  document.getElementById("groupmeal-list-view").hidden   = false;
+  document.getElementById("groupmeal-detail-view").hidden = true;
+}
+
+let _gmExpandedMeals = new Set(); // tracks which meal IDs are expanded
+
+function toggleGmMeal(mealId) {
+  if (_gmExpandedMeals.has(mealId)) _gmExpandedMeals.delete(mealId);
+  else _gmExpandedMeals.add(mealId);
+  const hdr  = document.getElementById(`gm-mhdr-${mealId}`);
+  const list = document.getElementById(`gm-rlist-${mealId}`);
+  if (hdr)  hdr.classList.toggle("open",  _gmExpandedMeals.has(mealId));
+  if (list) list.classList.toggle("open", _gmExpandedMeals.has(mealId));
+}
+
+function renderGroupMealDetail() {
+  const g = selectedGroupMeal;
+  if (!g) return;
+  const content = document.getElementById("groupmeal-detail-content");
+  const inGroupIds = new Set((g.meals||[]).map(m => m.id));
+  const available = savedMeals.filter(m => !inGroupIds.has(m.id));
+
+  const mealRows = (!g.meals || !g.meals.length)
+    ? `<p style="color:var(--muted);font-size:0.9rem;padding:0.5rem 0">No meals yet. Add some below.</p>`
+    : (g.meals||[]).map(m => {
+        const full = savedMeals.find(sm => sm.id === m.id);
+        const recipes = full ? (full.recipes || []) : [];
+        const rc = recipes.length;
+        const rs = m.recipe_servings || {};
+
+        // Meal-level servings input
+        const mealPh = m.servings != null ? String(m.servings)
+                     : (g.default_servings != null ? `Group default (${g.default_servings})` : "Servings…");
+        const mealVal = m.servings != null ? m.servings : "";
+
+        // Per-recipe rows (inside the dropdown)
+        const recipeRows = recipes.map(r => {
+          // Effective placeholder: recipe override > meal override > group default
+          const effBase = m.servings != null ? m.servings
+                        : (g.default_servings != null ? g.default_servings : null);
+          const rph = rs[r.id] != null ? String(rs[r.id])
+                    : (effBase != null ? `Meal default (${effBase})` : "Servings…");
+          const rval = rs[r.id] != null ? rs[r.id] : "";
+          return `<div class="gm-recipe-row">
+            <span class="gm-recipe-name">${esc(r.title)}</span>
+            <span class="gm-srv-label">Servings:</span>
+            <input type="number" class="gm-srv-input" min="0.5" step="0.5"
+              placeholder="${rph}" value="${rval}"
+              title="Servings for this recipe only"
+              onchange="updateGroupRecipeServings(${m.id}, ${r.id}, this.value)"/>
+          </div>`;
+        }).join("") || `<div style="padding:0.5rem 1rem;font-size:0.82rem;color:var(--muted)">No recipes in this meal.</div>`;
+
+        const expanded = _gmExpandedMeals.has(m.id);
+        return `<div class="gm-meal-block">
+          <div class="gm-meal-header${expanded?" open":""}" id="gm-mhdr-${m.id}">
+            <span class="gm-meal-chevron">▶</span>
+            <span class="gm-meal-name">${esc(m.name)}</span>
+            <span class="gm-meal-meta">${rc} recipe${rc!==1?"s":""}</span>
+            <input type="number" class="gm-srv-input" min="0.5" step="0.5"
+              style="margin-left:auto"
+              placeholder="${mealPh}" value="${mealVal}"
+              title="Default servings for all recipes in this meal"
+              onchange="updateGroupMealServings(${m.id}, this.value)"
+              onclick="event.stopPropagation()"/>
+            <button class="del-btn" style="font-size:0.9rem;padding:0 4px;flex-shrink:0"
+              onclick="event.stopPropagation();removeMealFromGroupMeal(${m.id})">✕</button>
+          </div>
+          <div class="gm-recipe-list${expanded?" open":""}" id="gm-rlist-${m.id}"
+            onclick="event.stopPropagation()">
+            ${recipeRows}
+          </div>
+        </div>`;
+      }).join("");
+
+  const addRow = available.length ? `
+    <div style="margin-top:0.9rem">
+      <div class="section-title" style="margin-bottom:0.5rem">Add Meal</div>
+      <div class="shop-search-bar" style="margin-bottom:0.5rem">
+        <input type="text" id="gm-meal-search" placeholder="Search meals…" oninput="renderGroupMealBrowser()"/>
+      </div>
+      <div id="gm-meal-browser" class="shop-browser" style="max-height:240px"></div>
+    </div>` : `<p style="font-size:0.82rem;color:var(--muted);margin-top:0.6rem">All saved meals are already in this group.</p>`;
+
+  const dsVal = g.default_servings != null ? g.default_servings : "";
+  content.innerHTML = `
+    <div class="recipe-card"><div class="card-body">
+      <div class="recipe-toolbar">
+        <div class="recipe-toolbar-left"></div>
+        <div class="recipe-toolbar-right">
+          <button class="btn btn-ghost" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="printGroupShopping()">🛒 Print List</button>
+          <button class="btn btn-ghost" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="printGroupRecipes()">🖨 Print Recipes</button>
+          <button class="btn btn-dark" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="exportGroupFolderPdf()">📁 Export PDF</button>
+          <button class="btn btn-danger" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="deleteGroupMeal(${g.id})">🗑 Delete</button>
+        </div>
+      </div>
+      <div class="editable-title" onclick="inlineGroupMealName(this)" title="Click to edit name">${esc(g.name)}</div>
+      <div style="display:flex;align-items:center;gap:0.6rem;margin-top:0.7rem;margin-bottom:0.3rem">
+        <label style="font-size:0.85rem;color:var(--muted);white-space:nowrap">Default servings for all meals:</label>
+        <input type="number" min="0.5" step="0.5" id="gm-default-servings"
+          style="width:80px;padding:0.25rem 0.4rem;border:1px solid var(--border);border-radius:6px;background:var(--input-bg,var(--card));color:var(--text);font-size:0.85rem"
+          placeholder="e.g. 8" value="${dsVal}"
+          title="Sets a default serving size applied to every meal (can be overridden per meal)"
+          onchange="updateGroupDefaultServings(this.value)"/>
+        <span style="font-size:0.78rem;color:var(--muted)">Override per meal below ↓</span>
+      </div>
+      <div class="section-title" style="margin-top:1rem">
+        Meals in this Group
+        <span style="font-size:0.75rem;font-weight:400;color:var(--muted);margin-left:0.5rem">▶ click a meal to expand its recipes</span>
+      </div>
+      <div id="gm-meal-list" class="detail-scroll-list">${mealRows}</div>
+      ${addRow}
+    </div></div>`;
+  // Wire up expand/collapse on meal headers (after innerHTML is set)
+  (g.meals||[]).forEach(m => {
+    const hdr = document.getElementById(`gm-mhdr-${m.id}`);
+    if (hdr) hdr.addEventListener("click", () => toggleGmMeal(m.id));
+  });
+  if (available.length) renderGroupMealBrowser();
+}
+
+function renderGroupMealBrowser() {
+  const browser = document.getElementById("gm-meal-browser");
+  if (!browser || !selectedGroupMeal) return;
+  const inGroupIds = new Set((selectedGroupMeal.meals||[]).map(m => m.id));
+  const q = (document.getElementById("gm-meal-search")?.value || "").toLowerCase();
+  const matches = savedMeals.filter(m => !inGroupIds.has(m.id) && (!q || m.name.toLowerCase().includes(q)));
+  browser.innerHTML = matches.length
+    ? matches.map(m => `
+        <div class="shop-recipe-row" onclick="addMealToGroupMeal(${m.id})">
+          <div class="shop-recipe-thumb-placeholder">🍽️</div>
+          <div class="shop-recipe-info">
+            <div class="shop-recipe-title">${esc(m.name)}</div>
+            <div class="shop-recipe-meta">${(m.recipes||[]).length} recipe${(m.recipes||[]).length!==1?"s":""}</div>
+          </div>
+        </div>`).join("")
+    : `<div style="padding:0.6rem;color:var(--muted);font-size:0.85rem">No matching meals.</div>`;
+}
+
+async function updateGroupDefaultServings(val) {
+  const g = selectedGroupMeal;
+  if (!g) return;
+  const ds = val && parseFloat(val) > 0 ? parseFloat(val) : null;
+  g.default_servings = ds;
+  await fetch(`/group-meals/${g.id}`, {
+    method:"PUT", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({name: g.name, default_servings: ds})
+  });
+  // Refresh placeholder text on per-meal inputs without full re-render
+  (g.meals||[]).forEach(m => {
+    if (m.servings == null) {
+      const row = document.querySelector(`#gm-meal-list .meal-recipe-row:nth-child(${(g.meals.indexOf(m)+1)}) input[type=number]`);
+      if (row) row.placeholder = ds != null ? `Default (${ds})` : "Servings…";
+    }
+  });
+}
+
+async function updateGroupMealServings(mealId, val) {
+  const g = selectedGroupMeal;
+  if (!g) return;
+  const srv = val && parseFloat(val) > 0 ? parseFloat(val) : null;
+  const m = (g.meals||[]).find(m => m.id === mealId);
+  if (m) m.servings = srv;
+  await fetch(`/group-meals/${g.id}/meals/${mealId}`, {
+    method:"PATCH", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({servings: srv})
+  });
+  // Refresh recipe-level placeholders for this meal (reflect new meal default)
+  const full = savedMeals.find(sm => sm.id === mealId);
+  if (full) {
+    (full.recipes||[]).forEach(r => {
+      const inp = document.querySelector(`#gm-rlist-${mealId} .gm-recipe-row input[onchange*="${r.id}"]`);
+      if (inp && (inp.value === "" || inp.value == null)) {
+        const effBase = srv != null ? srv : (g.default_servings != null ? g.default_servings : null);
+        inp.placeholder = effBase != null ? `Meal default (${effBase})` : "Servings…";
+      }
+    });
+  }
+}
+
+async function updateGroupRecipeServings(mealId, recipeId, val) {
+  const g = selectedGroupMeal;
+  if (!g) return;
+  const m = (g.meals||[]).find(m => m.id === mealId);
+  if (!m) return;
+  m.recipe_servings = m.recipe_servings || {};
+  const srv = val && parseFloat(val) > 0 ? parseFloat(val) : null;
+  if (srv != null) m.recipe_servings[recipeId] = srv;
+  else delete m.recipe_servings[recipeId];
+  await fetch(`/group-meals/${g.id}/meals/${mealId}`, {
+    method:"PATCH", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({servings: m.servings, recipe_servings: m.recipe_servings})
+  });
+}
+
+async function addMealToGroupMeal(mealId) {
+  const g = selectedGroupMeal;
+  if (!g) return;
+  const searchVal = document.getElementById("gm-meal-search")?.value || "";
+  await fetch(`/group-meals/${g.id}/meals`, {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({meal_id: mealId})
+  });
+  const m = savedMeals.find(m => m.id === mealId);
+  if (m) { g.meals = g.meals || []; g.meals.push({id: m.id, name: m.name, servings: null, recipe_servings: {}}); }
+  renderGroupMealDetail();
+  const inp = document.getElementById("gm-meal-search");
+  if (inp && searchVal) { inp.value = searchVal; renderGroupMealBrowser(); }
+  showToast();
+}
+
+async function removeMealFromGroupMeal(mealId) {
+  const g = selectedGroupMeal;
+  if (!g) return;
+  await fetch(`/group-meals/${g.id}/meals/${mealId}`, {method:"DELETE"});
+  g.meals = (g.meals||[]).filter(m => m.id !== mealId);
+  renderGroupMealDetail();
+  showToast();
+}
+
+async function inlineGroupMealName(el) {
+  const g = selectedGroupMeal;
+  if (!g) return;
+  const inp = document.createElement("input");
+  inp.value = g.name;
+  inp.className = "editable-title";
+  inp.style.cssText = "width:100%;font-size:inherit;font-weight:inherit";
+  el.replaceWith(inp);
+  inp.focus(); inp.select();
+  const save = async () => {
+    const v = inp.value.trim() || g.name;
+    g.name = v;
+    await fetch(`/group-meals/${g.id}`, {
+      method:"PUT", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({name: v, default_servings: g.default_servings})
+    });
+    const idx = savedGroupMeals.findIndex(gm => gm.id === g.id);
+    if (idx !== -1) savedGroupMeals[idx].name = v;
+    renderGroupMealDetail();
+    showToast();
+  };
+  inp.addEventListener("blur", save);
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") inp.blur(); if (e.key === "Escape") renderGroupMealDetail(); });
+}
+
+async function deleteGroupMeal(gid) {
+  const ok = await showConfirm("Delete this group meal?", "Delete");
+  if (!ok) return;
+  await fetch(`/group-meals/${gid}`, {method:"DELETE"});
+  savedGroupMeals = savedGroupMeals.filter(g => g.id !== gid);
+  backToGroupMealList();
+  renderGroupMealList();
+}
+
+async function deleteGroupMealById(gid) {
+  const ok = await showConfirm("Delete this group meal?", "Delete");
+  if (!ok) return;
+  await fetch(`/group-meals/${gid}`, {method:"DELETE"});
+  savedGroupMeals = savedGroupMeals.filter(g => g.id !== gid);
+  renderGroupMealList();
+}
+
+// ── Helpers for group meal print/PDF ──────────────────────────
+// Returns array of {recipe, factor} — factor scales ingredients by serving size.
+// Priority: per-recipe override > per-meal override > group default > no scaling (1)
+function _groupAllRecipes() {
+  const g = selectedGroupMeal;
+  if (!g) return [];
+  const seen = new Set();
+  const results = [];
+  (g.meals||[]).forEach(gm => {
+    const full = savedMeals.find(m => m.id === gm.id);
+    if (!full) return;
+    const rs = gm.recipe_servings || {};
+    // Meal-level effective servings (fallback chain below recipe level)
+    const mealServings = gm.servings != null ? gm.servings
+                       : (g.default_servings != null ? g.default_servings : null);
+    (full.recipes||[]).forEach(mr => {
+      if (!seen.has(mr.id)) {
+        seen.add(mr.id);
+        const r = savedRecipes.find(r => r.id === mr.id);
+        if (r) {
+          // Per-recipe override takes highest priority
+          const effectiveServings = rs[mr.id] != null ? rs[mr.id] : mealServings;
+          const origNum = r.servings_num || parseServingsNumJS(r.servings) || null;
+          const factor = (effectiveServings && origNum && origNum > 0)
+                       ? effectiveServings / origNum : 1;
+          results.push({recipe: r, factor});
+        }
+      }
+    });
+  });
+  return results;
+}
+
+function _groupShoppingEntries() {
+  return _groupAllRecipes().map(({recipe: r, factor}) => {
+    const igs = r.ingredient_groups || [{purpose:null, ingredients:r.ingredients||[]}];
+    const ings = igs.flatMap(g => (g.ingredients||[]).filter(t => t && t.trim()));
+    // If factor != 1, scale via scaleIngredient (same helper used by the serving scaler)
+    const scaled = factor !== 1 && typeof scaleIngredient === "function"
+      ? ings.map(i => scaleIngredient(i, factor))
+      : ings;
+    return { label: r.title, ingredients: scaled };
+  });
+}
+
+function printGroupRecipes() {
+  if (!selectedGroupMeal) return;
+  const pairs = _groupAllRecipes();
+  if (!pairs.length) { showAlert("No recipes found in the selected meals."); return; }
+  doPrint(buildMealRecipesHtml(pairs.map(p => p.recipe), pairs.map(p => p.factor)));
+}
+
+function exportGroupRecipesPdf() {
+  if (!selectedGroupMeal) return;
+  const pairs = _groupAllRecipes();
+  if (!pairs.length) { showAlert("No recipes found in the selected meals."); return; }
+  exportPdf(buildMealRecipesHtml(pairs.map(p => p.recipe), pairs.map(p => p.factor)), selectedGroupMeal.name + " - Recipes");
+}
+
+function printGroupShopping() {
+  if (!selectedGroupMeal) return;
+  const entries = _groupShoppingEntries();
+  const html = buildShoppingHtml(entries, selectedGroupMeal.name + " — Shopping List");
+  if (!html) { showAlert("No ingredients found."); return; }
+  doPrint(html);
+}
+
+function exportGroupShoppingPdf() {
+  if (!selectedGroupMeal) return;
+  const entries = _groupShoppingEntries();
+  const html = buildShoppingHtml(entries, selectedGroupMeal.name + " — Shopping List");
+  if (!html) { showAlert("No ingredients found."); return; }
+  exportPdf(html, selectedGroupMeal.name + " - Shopping List");
+}
+
+async function exportGroupFolderPdf() {
+  const g = selectedGroupMeal;
+  if (!g) return;
+  if (!window.pywebview) { showAlert("PDF export is only available in the desktop app."); return; }
+
+  const pdfs = [];
+
+  // Shopping list PDF
+  const shopEntries = _groupShoppingEntries();
+  const shopHtml = buildShoppingHtml(shopEntries, g.name + " — Shopping List");
+  if (shopHtml) pdfs.push({ filename: "Shopping List", html: shopHtml });
+
+  // One PDF per meal
+  (g.meals || []).forEach(gm => {
+    const full = savedMeals.find(m => m.id === gm.id);
+    if (!full || !full.recipes || !full.recipes.length) return;
+    const rs = gm.recipe_servings || {};
+    const mealServings = gm.servings != null ? gm.servings
+                       : (g.default_servings != null ? g.default_servings : null);
+    const pairs = full.recipes.map(mr => {
+      const r = savedRecipes.find(r => r.id === mr.id);
+      if (!r) return null;
+      const effectiveServings = rs[mr.id] != null ? rs[mr.id] : mealServings;
+      const origNum = r.servings_num || parseServingsNumJS(r.servings) || null;
+      const factor = (effectiveServings && origNum && origNum > 0) ? effectiveServings / origNum : 1;
+      return {r, factor};
+    }).filter(Boolean);
+    if (pairs.length) {
+      pdfs.push({
+        filename: full.name,
+        html: buildMealRecipesHtml(pairs.map(p => p.r), pairs.map(p => p.factor))
+      });
+    }
+  });
+
+  if (!pdfs.length) { showAlert("No content to export."); return; }
+
+  showToast("Saving PDFs…", 0);
+  const result = await window.pywebview.api.save_pdf_folder(pdfs, g.name);
+  if (result && result.ok) {
+    showToast(`Saved ${result.count} PDF${result.count !== 1 ? "s" : ""} to folder!`);
+  } else if (result && result.msg !== "Cancelled") {
+    showAlert("Export failed: " + result.msg);
+  } else {
+    showToast("");
+  }
+}
+
+function doPrint(fullHtml) {
+  // Inject content into the current window and call window.print().
+  // This opens the browser's native print dialog — works reliably in pywebview.
+  const styleMatch = fullHtml.match(/<style>([\s\S]*?)<\/style>/i);
+  const bodyMatch  = fullHtml.match(/<body>([\s\S]*?)<\/body>/i);
+  const styleContent = styleMatch ? styleMatch[1] : "";
+  const bodyContent  = bodyMatch  ? bodyMatch[1]  : fullHtml;
+
+  const ps = document.createElement("style");
+  ps.id = "_print_style";
+  ps.textContent = `
+    @media screen { #_print_overlay { display:none !important; } }
+    @media print  {
+      body > *:not(#_print_overlay) { display:none !important; }
+      #_print_overlay { display:block !important; }
+    }
+    ${styleContent}
+  `;
+  const po = document.createElement("div");
+  po.id = "_print_overlay";
+  po.innerHTML = bodyContent;
+  document.head.appendChild(ps);
+  document.body.appendChild(po);
+  window.print();
+  document.head.removeChild(ps);
+  document.body.removeChild(po);
 }
 </script>
 </body>

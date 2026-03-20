@@ -5,19 +5,116 @@ import json
 import re
 import os
 import sys
+import subprocess
+import csv
+import io
+import base64
+import mimetypes
+import uuid
 
 # ── Path setup (works both in development and as a PyInstaller .exe) ──────────
 # BASE_DIR  = where the bundled files live (read-only when frozen)
 # DATA_DIR  = where we write user data (db, uploads) – always writable
 if getattr(sys, "frozen", False):
     BASE_DIR = sys._MEIPASS                          # type: ignore[attr-defined]
-    DATA_DIR = os.path.dirname(sys.executable)
+    # Respect the data directory set by launcher.py; fall back to exe dir
+    DATA_DIR = os.environ.get("RECIPE_DATA_DIR") or os.path.dirname(sys.executable)
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    DATA_DIR = BASE_DIR
+    DATA_DIR = os.environ.get("RECIPE_DATA_DIR") or BASE_DIR
 
-DB_PATH     = os.path.join(DATA_DIR, "recipes.db")
-UPLOADS_DIR = os.path.join(DATA_DIR, "static", "uploads")
+COOKBOOKS_DIR        = os.path.join(DATA_DIR, "cookbooks")
+DEFAULT_COOKBOOK_NAME = "My Cookbook"
+DB_PATH              = os.path.join(COOKBOOKS_DIR, DEFAULT_COOKBOOK_NAME + ".cookbook")
+UPLOADS_DIR          = os.path.join(DATA_DIR, "static", "uploads")
+
+_active_db    = {"path": DB_PATH}
+SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")
+
+def active_db_path():
+    return _active_db["path"]
+
+def load_settings():
+    try:
+        with open(SETTINGS_PATH) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def save_settings_to_file(data):
+    with open(SETTINGS_PATH, "w") as f:
+        json.dump(data, f, indent=2)
+
+def add_recent_file(path):
+    s = load_settings()
+    recent = s.get("recentFiles", [])
+    path = os.path.normpath(path)
+    if path in recent:
+        recent.remove(path)
+    recent.insert(0, path)
+    s["recentFiles"] = recent[:10]
+    save_settings_to_file(s)
+
+
+def get_cookbooks_list():
+    """Return all .cookbook files in COOKBOOKS_DIR with metadata."""
+    os.makedirs(COOKBOOKS_DIR, exist_ok=True)
+    books = []
+    for fname in sorted(os.listdir(COOKBOOKS_DIR)):
+        if not fname.endswith(".cookbook"):
+            continue
+        name = fname[:-9]
+        path = os.path.join(COOKBOOKS_DIR, fname)
+        try:
+            c = sqlite3.connect(path)
+            count = c.execute("SELECT COUNT(*) FROM recipes").fetchone()[0]
+            c.close()
+        except Exception:
+            count = 0
+        books.append({
+            "name":        name,
+            "path":        path,
+            "isDefault":   False,
+            "isActive":    os.path.normpath(path) == os.path.normpath(_active_db["path"]),
+            "recipeCount": count,
+        })
+    books.sort(key=lambda b: b["name"].lower())
+    return books
+
+
+def startup():
+    """
+    Called once when the server starts.
+    - Ensures cookbooks/ folder exists.
+    - Migrates old recipes.db → My Cookbook.cookbook if needed.
+    - Restores the last-used cookbook from settings.
+    - Initialises the active cookbook's schema.
+    """
+    os.makedirs(COOKBOOKS_DIR, exist_ok=True)
+    default_path = os.path.join(COOKBOOKS_DIR, DEFAULT_COOKBOOK_NAME + ".cookbook")
+
+    # One-time migration: copy old recipes.db into the cookbooks folder
+    old_db = os.path.join(DATA_DIR, "recipes.db")
+    if os.path.exists(old_db) and not os.path.exists(default_path):
+        import shutil
+        shutil.copy2(old_db, default_path)
+
+    # Create default cookbook if it still doesn't exist
+    if not os.path.exists(default_path):
+        _active_db["path"] = default_path
+        init_db()
+
+    # Restore last-used cookbook
+    s = load_settings()
+    last = s.get("activeCookbook")
+    if last and os.path.exists(last):
+        _active_db["path"] = last
+    else:
+        _active_db["path"] = default_path
+
+    # Make sure the active cookbook has up-to-date schema
+    init_db()
+
 
 app = Flask(__name__, static_folder=os.path.join(BASE_DIR, "static"))
 
@@ -27,7 +124,7 @@ app = Flask(__name__, static_folder=os.path.join(BASE_DIR, "static"))
 def get_db():
     db = getattr(g, "_database", None)
     if db is None:
-        db = g._database = sqlite3.connect(DB_PATH)
+        db = g._database = sqlite3.connect(active_db_path())
         db.row_factory = sqlite3.Row
     return db
 
@@ -40,7 +137,7 @@ def close_db(exception):
 
 
 def init_db():
-    with sqlite3.connect(DB_PATH) as conn:
+    with sqlite3.connect(active_db_path()) as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS recipes (
                 id                 INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,17 +157,25 @@ def init_db():
                 created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        for col in ["ingredient_groups", "instruction_groups", "category TEXT DEFAULT NULL", "view_count INTEGER DEFAULT 0"]:
+        for col in ["ingredient_groups", "instruction_groups", "category TEXT DEFAULT NULL",
+                    "view_count INTEGER DEFAULT 0", "categories TEXT DEFAULT NULL"]:
             try:
                 conn.execute(f"ALTER TABLE recipes ADD COLUMN {col}")
             except Exception:
                 pass
+        for col in ["categories TEXT DEFAULT NULL", "default_servings REAL DEFAULT NULL"]:
+            try:
+                conn.execute(f"ALTER TABLE meals ADD COLUMN {col}")
+            except Exception:
+                pass
         conn.execute("""
             CREATE TABLE IF NOT EXISTS meals (
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                name       TEXT NOT NULL,
-                category   TEXT DEFAULT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                name             TEXT NOT NULL,
+                category         TEXT DEFAULT NULL,
+                categories       TEXT DEFAULT NULL,
+                default_servings REAL DEFAULT NULL,
+                created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
         try:
@@ -82,10 +187,66 @@ def init_db():
                 meal_id    INTEGER NOT NULL,
                 recipe_id  INTEGER NOT NULL,
                 sort_order INTEGER DEFAULT 0,
+                servings   REAL DEFAULT NULL,
                 PRIMARY KEY (meal_id, recipe_id)
             )
         """)
+        try:
+            conn.execute("ALTER TABLE meal_recipes ADD COLUMN servings REAL DEFAULT NULL")
+        except Exception:
+            pass
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS group_meals (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                name             TEXT NOT NULL,
+                default_servings REAL DEFAULT NULL,
+                created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        for col in ["default_servings REAL DEFAULT NULL"]:
+            try: conn.execute(f"ALTER TABLE group_meals ADD COLUMN {col}")
+            except Exception: pass
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS group_meal_members (
+                group_id   INTEGER NOT NULL,
+                meal_id    INTEGER NOT NULL,
+                servings   REAL DEFAULT NULL,
+                sort_order INTEGER DEFAULT 0,
+                PRIMARY KEY (group_id, meal_id)
+            )
+        """)
+        for col in ["servings REAL DEFAULT NULL", "recipe_servings TEXT DEFAULT NULL"]:
+            try: conn.execute(f"ALTER TABLE group_meal_members ADD COLUMN {col}")
+            except Exception: pass
         conn.commit()
+
+
+def _parse_categories(d):
+    """Return a clean list of up to 5 categories from a row dict."""
+    if d.get("categories"):
+        try:
+            cats = json.loads(d["categories"])
+            if isinstance(cats, list):
+                return [str(c).strip() for c in cats if str(c).strip()][:5]
+        except Exception:
+            pass
+    # Fall back to single category field
+    return [d["category"]] if d.get("category") else []
+
+
+def _categories_payload(data):
+    """Extract categories list from request data, keeping category in sync."""
+    cats = data.get("categories")
+    if isinstance(cats, list):
+        cats = [str(c).strip() for c in cats if str(c).strip()][:5]
+    elif isinstance(cats, str) and cats:
+        cats = [c.strip() for c in cats.split(",") if c.strip()][:5]
+    else:
+        # Fall back to single category field
+        single = (data.get("category") or "").strip()
+        cats = [single] if single else []
+    category = cats[0] if cats else None
+    return cats, category
 
 
 def row_to_dict(row):
@@ -104,6 +265,9 @@ def row_to_dict(row):
         if d.get("instruction_groups")
         else [{"purpose": None, "steps": flat_steps}]
     )
+    cats = _parse_categories(d)
+    d["categories"] = cats
+    d["category"]   = cats[0] if cats else None
     return d
 
 
@@ -245,17 +409,236 @@ def list_recipes():
     return jsonify([row_to_dict(r) for r in rows])
 
 
+def parse_text_recipe(text):
+    """Parse a plain-text recipe file into a recipe dict.
+    Recognises labelled sections (Ingredients:, Instructions:, etc.)
+    and falls back to heuristics for unlabelled text."""
+    text = _normalize_fractions(text)
+    lines = [l.rstrip() for l in text.splitlines()]
+
+    # Strip BOM / leading blank lines
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    if not lines:
+        return None
+
+    title = lines[0].strip()
+
+    # Keyword section headers
+    SECTION = re.compile(
+        r'^(?P<key>ingredients?|directions?|instructions?|steps?|method'
+        r'|servings?|serves?|category|time|prep|cook|source|url|notes?'
+        r'|description)\s*:?\s*$',
+        re.IGNORECASE,
+    )
+    INLINE = re.compile(
+        r'^(?P<key>servings?|serves?|category|time|prep|cook|source|url|notes?)\s*:\s*(?P<val>.+)$',
+        re.IGNORECASE,
+    )
+
+    ingredients, instructions = [], []
+    meta = {}
+    current = None
+
+    for line in lines[1:]:
+        stripped = line.strip()
+        m_sec = SECTION.match(stripped)
+        m_inl = INLINE.match(stripped)
+
+        if m_sec:
+            key = m_sec.group("key").lower().rstrip("s")
+            if key in ("ingredient",):
+                current = "ing"
+            elif key in ("direction", "instruction", "step", "method"):
+                current = "ins"
+            elif key in ("serving", "serve"):
+                current = "serving"
+            elif key == "category":
+                current = "category"
+            else:
+                current = None
+            continue
+
+        if m_inl:
+            key = m_inl.group("key").lower().rstrip("s")
+            val = m_inl.group("val").strip()
+            if key in ("serving", "serve"):
+                meta["servings"] = val
+            elif key == "category":
+                meta["category"] = val
+            elif key in ("time", "prep", "cook"):
+                meta["total_time"] = val
+            elif key in ("source", "url"):
+                meta["source_url"] = val
+            current = None
+            continue
+
+        if not stripped:
+            continue
+
+        if current == "ing":
+            ingredients.append(stripped)
+        elif current == "ins":
+            instructions.append(stripped)
+        # else: ignore (preamble / notes)
+
+    # Fallback: if no sections found, try a blank-line split heuristic
+    if not ingredients and not instructions:
+        blocks = []
+        block = []
+        for line in lines[1:]:
+            if line.strip():
+                block.append(line.strip())
+            elif block:
+                blocks.append(block)
+                block = []
+        if block:
+            blocks.append(block)
+        # Heuristic: block with many short lines = ingredients
+        for b in blocks:
+            avg_len = sum(len(l) for l in b) / max(len(b), 1)
+            if avg_len < 50 and not ingredients:
+                ingredients = b
+            else:
+                instructions.extend(b)
+
+    if not title:
+        return None
+
+    ig = [{"purpose": None, "ingredients": ingredients}]
+    sg = [{"purpose": None, "steps": instructions}]
+    return {
+        "title":              title,
+        "servings":           meta.get("servings"),
+        "servings_num":       parse_servings_num(meta.get("servings", "")),
+        "total_time":         meta.get("total_time"),
+        "source_url":         meta.get("source_url"),
+        "site_name":          None,
+        "category":           meta.get("category"),
+        "image":              None,
+        "ingredients":        ingredients,
+        "instructions":       instructions,
+        "ingredient_groups":  ig,
+        "instruction_groups": sg,
+    }
+
+
+def _insert_recipes_into_db(db, recipes):
+    """Bulk-insert a list of recipe dicts into an open SQLite connection."""
+    for r in recipes:
+        ig = r.get("ingredient_groups")
+        sg = r.get("instruction_groups")
+        cats = r.get("categories") or ([r["category"]] if r.get("category") else [])
+        category = cats[0] if cats else None
+        db.execute(
+            """INSERT INTO recipes
+               (title,servings,servings_num,ingredients,instructions,
+                ingredient_groups,instruction_groups,image,total_time,
+                site_name,source_url,category,categories)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (r.get("title", "Untitled"),
+             r.get("servings"), r.get("servings_num"),
+             json.dumps(r.get("ingredients", [])),
+             json.dumps(r.get("instructions", [])),
+             json.dumps(ig) if ig else None,
+             json.dumps(sg) if sg else None,
+             r.get("image"), r.get("total_time"),
+             r.get("site_name"), r.get("source_url"),
+             category, json.dumps(cats) if cats else None),
+        )
+
+
+@app.route("/recipes/import-peek", methods=["POST"])
+def import_recipes_peek():
+    """Preview a .cookbook or .csv file — returns type and recipe count, no changes made."""
+    import tempfile
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No file uploaded"}), 400
+    ext = os.path.splitext(f.filename or "")[1].lower()
+    if ext not in (".cookbook", ".csv"):
+        return jsonify({"error": "Unsupported for peek"}), 400
+    tmp = tempfile.NamedTemporaryFile(suffix=ext, delete=False, dir=DATA_DIR)
+    f.save(tmp.name)
+    tmp.close()
+    try:
+        if ext == ".cookbook":
+            try:
+                conn2 = sqlite3.connect(tmp.name)
+                count = conn2.execute("SELECT COUNT(*) FROM recipes").fetchone()[0]
+                conn2.close()
+            except Exception:
+                count = 0
+            return jsonify({"type": "cookbook", "recipeCount": count})
+        else:
+            csv_type, recipes = detect_and_parse_csv(tmp.name)
+            display_type = "csv_rm" if csv_type == "rm" else "csv"
+            return jsonify({"type": display_type, "recipeCount": len(recipes)})
+    finally:
+        try:
+            os.unlink(tmp.name)
+        except Exception:
+            pass
+
+
+@app.route("/recipes/import-file", methods=["POST"])
+def import_recipes_to_current():
+    """Upload a .txt / .cookbook / .csv and add its recipes to the active cookbook."""
+    import tempfile
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    ext = os.path.splitext(f.filename or "")[1].lower()
+    if ext not in (".txt", ".cookbook", ".csv"):
+        return jsonify({"error": "Unsupported file type. Use .txt, .cookbook, or .csv"}), 400
+
+    tmp = tempfile.NamedTemporaryFile(suffix=ext, delete=False, dir=DATA_DIR)
+    f.save(tmp.name)
+    tmp.close()
+
+    try:
+        recipes = []
+        if ext == ".txt":
+            text = open(tmp.name, encoding="utf-8-sig", errors="replace").read()
+            r = parse_text_recipe(text)
+            if r:
+                recipes = [r]
+        elif ext == ".cookbook":
+            conn2 = sqlite3.connect(tmp.name)
+            conn2.row_factory = sqlite3.Row
+            rows = conn2.execute("SELECT * FROM recipes").fetchall()
+            conn2.close()
+            recipes = [row_to_dict(r) for r in rows]
+        elif ext == ".csv":
+            _csv_type, recipes = detect_and_parse_csv(tmp.name)
+
+        if not recipes:
+            return jsonify({"error": "No recipes found in the file."}), 422
+
+        db = get_db()
+        _insert_recipes_into_db(db, recipes)
+        db.commit()
+        return jsonify({"ok": True, "imported": len(recipes)}), 201
+    finally:
+        try:
+            os.unlink(tmp.name)
+        except Exception:
+            pass
+
+
 @app.route("/recipes", methods=["POST"])
 def save_recipe():
     data = request.get_json()
     ig = data.get("ingredient_groups")
     sg = data.get("instruction_groups")
+    cats, category = _categories_payload(data)
     db = get_db()
     cur = db.execute(
         """INSERT INTO recipes
            (title, servings, servings_num, ingredients, instructions,
-            ingredient_groups, instruction_groups, image, total_time, site_name, source_url, category)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+            ingredient_groups, instruction_groups, image, total_time, site_name, source_url, category, categories)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             data.get("title", "Untitled"),
             data.get("servings"),
@@ -268,7 +651,8 @@ def save_recipe():
             data.get("total_time"),
             data.get("site_name"),
             data.get("source_url"),
-            data.get("category"),
+            category,
+            json.dumps(cats) if cats else None,
         ),
     )
     db.commit()
@@ -289,11 +673,12 @@ def update_recipe(rid):
     data = request.get_json()
     ig = data.get("ingredient_groups")
     sg = data.get("instruction_groups")
+    cats, category = _categories_payload(data)
     db = get_db()
     db.execute(
         """UPDATE recipes
            SET title=?, servings=?, servings_num=?, ingredients=?, instructions=?,
-               ingredient_groups=?, instruction_groups=?, image=?, total_time=?, site_name=?, category=?
+               ingredient_groups=?, instruction_groups=?, image=?, total_time=?, site_name=?, category=?, categories=?
            WHERE id=?""",
         (
             data.get("title"),
@@ -306,7 +691,8 @@ def update_recipe(rid):
             data.get("image"),
             data.get("total_time"),
             data.get("site_name"),
-            data.get("category"),
+            category,
+            json.dumps(cats) if cats else None,
             rid,
         ),
     )
@@ -367,12 +753,15 @@ def list_meals():
     result = []
     for m in meals:
         recipes = db.execute(
-            """SELECT r.id, r.title, r.servings, r.servings_num, r.image
+            """SELECT r.id, r.title, r.servings, r.servings_num, r.image, mr.servings AS recipe_servings
                FROM meal_recipes mr JOIN recipes r ON r.id = mr.recipe_id
                WHERE mr.meal_id = ? ORDER BY mr.sort_order""",
             (m["id"],)
         ).fetchall()
-        result.append({**dict(m), "recipes": [dict(r) for r in recipes]})
+        md = dict(m)
+        md["categories"] = _parse_categories(md)
+        md["category"]   = md["categories"][0] if md["categories"] else None
+        result.append({**md, "recipes": [dict(r) for r in recipes]})
     return jsonify(result)
 
 
@@ -390,8 +779,10 @@ def create_meal():
 def update_meal(mid):
     data = request.get_json()
     db = get_db()
-    db.execute("UPDATE meals SET name=?, category=? WHERE id=?",
-               (data.get("name"), data.get("category"), mid))
+    cats, category = _categories_payload(data)
+    ds = data.get("default_servings")
+    db.execute("UPDATE meals SET name=?, category=?, categories=?, default_servings=? WHERE id=?",
+               (data.get("name"), category, json.dumps(cats) if cats else None, ds, mid))
     db.commit()
     return jsonify({"ok": True})
 
@@ -426,7 +817,671 @@ def remove_recipe_from_meal(mid, rid):
     return jsonify({"ok": True})
 
 
+@app.route("/meals/<int:mid>/recipes/<int:rid>/servings", methods=["PUT"])
+def set_meal_recipe_servings(mid, rid):
+    data = request.get_json()
+    srv = data.get("servings")
+    db = get_db()
+    db.execute("UPDATE meal_recipes SET servings=? WHERE meal_id=? AND recipe_id=?", (srv, mid, rid))
+    db.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/group-meals", methods=["GET"])
+def list_group_meals():
+    db = get_db()
+    groups = db.execute("SELECT * FROM group_meals ORDER BY created_at DESC").fetchall()
+    result = []
+    for g in groups:
+        meals = db.execute(
+            """SELECT m.id, m.name, gm.servings, gm.recipe_servings
+               FROM group_meal_members gm
+               JOIN meals m ON m.id = gm.meal_id
+               WHERE gm.group_id = ? ORDER BY gm.sort_order""",
+            (g["id"],)
+        ).fetchall()
+        meal_list = []
+        for ml in meals:
+            md = dict(ml)
+            try:
+                md["recipe_servings"] = json.loads(md["recipe_servings"]) if md["recipe_servings"] else {}
+            except Exception:
+                md["recipe_servings"] = {}
+            meal_list.append(md)
+        result.append({**dict(g), "meals": meal_list})
+    return jsonify(result)
+
+
+@app.route("/group-meals", methods=["POST"])
+def create_group_meal():
+    data = request.get_json()
+    db = get_db()
+    cur = db.execute("INSERT INTO group_meals (name) VALUES (?)", (data.get("name", "New Group"),))
+    db.commit()
+    return jsonify({"id": cur.lastrowid, "name": data.get("name", "New Group"),
+                    "default_servings": None, "meals": []}), 201
+
+
+@app.route("/group-meals/<int:gid>", methods=["PUT"])
+def update_group_meal(gid):
+    data = request.get_json()
+    db = get_db()
+    ds = data.get("default_servings")
+    ds = float(ds) if ds not in (None, "", "null") else None
+    db.execute("UPDATE group_meals SET name=?, default_servings=? WHERE id=?",
+               (data.get("name"), ds, gid))
+    db.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/group-meals/<int:gid>", methods=["DELETE"])
+def delete_group_meal(gid):
+    db = get_db()
+    db.execute("DELETE FROM group_meal_members WHERE group_id=?", (gid,))
+    db.execute("DELETE FROM group_meals WHERE id=?", (gid,))
+    db.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/group-meals/<int:gid>/meals", methods=["POST"])
+def add_meal_to_group(gid):
+    data = request.get_json()
+    mid = data.get("meal_id")
+    db = get_db()
+    try:
+        db.execute("INSERT OR IGNORE INTO group_meal_members (group_id, meal_id) VALUES (?,?)", (gid, mid))
+        db.commit()
+    except Exception:
+        pass
+    return jsonify({"ok": True})
+
+
+@app.route("/group-meals/<int:gid>/meals/<int:mid>", methods=["PATCH"])
+def patch_group_meal_member(gid, mid):
+    data = request.get_json()
+    db = get_db()
+    srv = data.get("servings")
+    srv = float(srv) if srv not in (None, "", "null") else None
+    # recipe_servings: dict of {str(recipe_id): float|None}
+    rs = data.get("recipe_servings")
+    rs_json = json.dumps(rs) if isinstance(rs, dict) else None
+    if rs_json is not None:
+        db.execute("UPDATE group_meal_members SET servings=?, recipe_servings=? WHERE group_id=? AND meal_id=?",
+                   (srv, rs_json, gid, mid))
+    else:
+        db.execute("UPDATE group_meal_members SET servings=? WHERE group_id=? AND meal_id=?",
+                   (srv, gid, mid))
+    db.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/group-meals/<int:gid>/meals/<int:mid>", methods=["DELETE"])
+def remove_meal_from_group(gid, mid):
+    db = get_db()
+    db.execute("DELETE FROM group_meal_members WHERE group_id=? AND meal_id=?", (gid, mid))
+    db.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/file/current")
+def file_current():
+    path = active_db_path()
+    name = os.path.splitext(os.path.basename(path))[0]
+    s    = load_settings()
+    return jsonify({"path": path, "name": name, "recentFiles": s.get("recentFiles", [])})
+
+@app.route("/file/new", methods=["POST"])
+def file_new():
+    data = request.get_json()
+    path = data.get("path")
+    if not path:
+        return jsonify({"error": "No path provided"}), 400
+    _active_db["path"] = path
+    init_db()
+    add_recent_file(path)
+    return jsonify({"ok": True, "path": path})
+
+@app.route("/file/open", methods=["POST"])
+def file_open_route():
+    data = request.get_json()
+    path = data.get("path")
+    if not path:
+        return jsonify({"error": "No path provided"}), 400
+    if not os.path.exists(path):
+        return jsonify({"error": "File not found"}), 404
+    _active_db["path"] = path
+    add_recent_file(path)
+    return jsonify({"ok": True, "path": path})
+
+@app.route("/file/save-as", methods=["POST"])
+def file_save_as():
+    import shutil
+    data = request.get_json()
+    new_path = data.get("path")
+    if not new_path:
+        return jsonify({"error": "No path provided"}), 400
+    shutil.copy2(active_db_path(), new_path)
+    _active_db["path"] = new_path
+    add_recent_file(new_path)
+    return jsonify({"ok": True, "path": new_path})
+
+@app.route("/settings", methods=["GET"])
+def get_settings_route():
+    return jsonify(load_settings())
+
+@app.route("/settings", methods=["POST"])
+def post_settings_route():
+    data = request.get_json()
+    s = load_settings()
+    s.update(data)
+    save_settings_to_file(s)
+    return jsonify({"ok": True})
+
+
+# ── Cookbooks ──────────────────────────────────────────────────────────────
+
+@app.route("/cookbooks", methods=["GET"])
+def list_cookbooks():
+    return jsonify(get_cookbooks_list())
+
+
+@app.route("/cookbooks", methods=["POST"])
+def create_cookbook():
+    data   = request.get_json()
+    name   = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "Name required"}), 400
+    # Sanitise filename
+    safe = re.sub(r'[\\/:*?"<>|]', "", name).strip()
+    if not safe:
+        return jsonify({"error": "Invalid name"}), 400
+    path = os.path.join(COOKBOOKS_DIR, safe + ".cookbook")
+    if os.path.exists(path):
+        return jsonify({"error": "A cookbook with that name already exists"}), 409
+    _active_db["path"] = path
+    init_db()
+    # Save as active
+    s = load_settings()
+    s["activeCookbook"] = path
+    save_settings_to_file(s)
+    return jsonify({"ok": True, "name": safe, "path": path}), 201
+
+
+@app.route("/cookbooks/switch", methods=["POST"])
+def switch_cookbook():
+    data = request.get_json()
+    path = data.get("path", "").strip()
+    if not path or not os.path.exists(path):
+        return jsonify({"error": "Cookbook not found"}), 404
+    _active_db["path"] = path
+    s = load_settings()
+    s["activeCookbook"] = path
+    save_settings_to_file(s)
+    return jsonify({"ok": True})
+
+
+@app.route("/cookbooks/rename", methods=["POST"])
+def rename_cookbook():
+    data     = request.get_json()
+    old_name = (data.get("oldName") or "").strip()
+    new_name = (data.get("newName") or "").strip()
+    if not new_name:
+        return jsonify({"error": "Name required"}), 400
+    safe_new = re.sub(r'[\\/:*?"<>|]', "", new_name).strip()
+    old_path = os.path.join(COOKBOOKS_DIR, old_name + ".cookbook")
+    new_path = os.path.join(COOKBOOKS_DIR, safe_new + ".cookbook")
+    if not os.path.exists(old_path):
+        return jsonify({"error": "Original cookbook not found"}), 404
+    if os.path.exists(new_path):
+        return jsonify({"error": "A cookbook with that name already exists"}), 409
+    os.rename(old_path, new_path)
+    if os.path.normpath(_active_db["path"]) == os.path.normpath(old_path):
+        _active_db["path"] = new_path
+        s = load_settings()
+        s["activeCookbook"] = new_path
+        save_settings_to_file(s)
+    return jsonify({"ok": True, "newName": safe_new, "newPath": new_path})
+
+
+@app.route("/cookbooks/delete", methods=["POST"])
+def delete_cookbook():
+    data = request.get_json()
+    name = (data.get("name") or "").strip()
+    path = os.path.join(COOKBOOKS_DIR, name + ".cookbook")
+    if not os.path.exists(path):
+        return jsonify({"error": "Cookbook not found"}), 404
+    # Must always keep at least one cookbook
+    all_books = [f for f in os.listdir(COOKBOOKS_DIR) if f.endswith(".cookbook")]
+    if len(all_books) <= 1:
+        return jsonify({"error": "Cannot delete your only cookbook"}), 403
+    # If deleting the active one, switch to first other available
+    if os.path.normpath(_active_db["path"]) == os.path.normpath(path):
+        for other_fname in sorted(all_books):
+            other_path = os.path.join(COOKBOOKS_DIR, other_fname)
+            if os.path.normpath(other_path) != os.path.normpath(path):
+                _active_db["path"] = other_path
+                s = load_settings()
+                s["activeCookbook"] = other_path
+                save_settings_to_file(s)
+                break
+    # Close any open Flask g-level connection to this file before deleting
+    db = getattr(g, "_database", None)
+    if db is not None:
+        try:
+            db.close()
+        except Exception:
+            pass
+        g._database = None
+    # Force Python GC so any other lingering sqlite3 handles are released
+    import gc
+    gc.collect()
+    os.remove(path)
+    return jsonify({"ok": True})
+
+
+# ── CSV helpers ────────────────────────────────────────────────────────────────
+
+def _image_to_exportable(image_val):
+    """Convert a stored image value to a portable form for CSV export.
+    Local uploads are embedded as base64 data-URIs so the CSV is self-contained."""
+    if not image_val:
+        return ""
+    if image_val.startswith("data:"):
+        return image_val                    # already a data-URI
+    if image_val.startswith("/static/uploads/"):
+        filename = image_val[len("/static/uploads/"):]
+        filepath = os.path.join(UPLOADS_DIR, filename)
+        if os.path.exists(filepath):
+            mime = mimetypes.guess_type(filepath)[0] or "image/jpeg"
+            with open(filepath, "rb") as fh:
+                b64 = base64.b64encode(fh.read()).decode()
+            return f"data:{mime};base64,{b64}"
+    return image_val                        # external URL — keep as-is
+
+
+def _image_from_import(image_val):
+    """Restore an exported image value back to a storable form.
+    Base64 data-URIs are decoded and saved as local uploads."""
+    if not image_val:
+        return None
+    if image_val.startswith("data:"):
+        try:
+            header, b64data = image_val.split(",", 1)
+            ext = header.split(";")[0].split("/")[-1]
+            if ext not in ("jpeg", "jpg", "png", "gif", "webp"):
+                ext = "jpg"
+            filename = f"imported_{uuid.uuid4().hex[:12]}.{ext}"
+            os.makedirs(UPLOADS_DIR, exist_ok=True)
+            with open(os.path.join(UPLOADS_DIR, filename), "wb") as fh:
+                fh.write(base64.b64decode(b64data))
+            return f"/static/uploads/{filename}"
+        except Exception:
+            return None
+    return image_val                        # external URL — keep as-is
+
+
+# ── Macleay Recipe Manager CSV (lossless round-trip) ──────────────────────────
+# First row is a header containing "rm_version" in column 0.
+# This distinguishes it from AccuChef CSVs (which start with a blank row).
+_RM_CSV_HEADER = [
+    "rm_version", "title", "categories", "category", "servings", "servings_num",
+    "total_time", "source_url", "site_name", "image",
+    "ingredient_groups", "instruction_groups",
+]
+
+
+def export_cookbook_csv(cookbook_path):
+    """Export all recipes to a Recipe Manager CSV (full fidelity, lossless)."""
+    conn = sqlite3.connect(cookbook_path)
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute("SELECT * FROM recipes ORDER BY title COLLATE NOCASE").fetchall()
+    conn.close()
+
+    output = io.StringIO()
+    writer = csv.writer(output, quoting=csv.QUOTE_ALL, lineterminator="\r\n")
+    writer.writerow(_RM_CSV_HEADER)
+
+    for row in rows:
+        r = row_to_dict(row)
+        cats = r.get("categories") or ([r["category"]] if r.get("category") else [])
+        writer.writerow([
+            "1",                                                        # rm_version
+            r.get("title") or "",
+            json.dumps(cats, ensure_ascii=False),                       # categories (JSON array)
+            cats[0] if cats else "",                                    # category (first, legacy)
+            r.get("servings") or "",
+            r.get("servings_num") if r.get("servings_num") is not None else "",
+            r.get("total_time") or "",
+            r.get("source_url") or "",
+            r.get("site_name") or "",
+            _image_to_exportable(r.get("image") or ""),
+            json.dumps(r.get("ingredient_groups") or [], ensure_ascii=False),
+            json.dumps(r.get("instruction_groups") or [], ensure_ascii=False),
+        ])
+
+    return output.getvalue()
+
+
+# ── Unicode fraction normalisation ────────────────────────────
+_UNICODE_FRACTIONS = {
+    '\u00bd': '1/2', '\u00bc': '1/4', '\u00be': '3/4',
+    '\u2153': '1/3', '\u2154': '2/3',
+    '\u215b': '1/8', '\u215c': '3/8', '\u215d': '5/8', '\u215e': '7/8',
+    '\u2159': '1/6', '\u215a': '5/6',
+    '\u2155': '1/5', '\u2156': '2/5', '\u2157': '3/5', '\u2158': '4/5',
+}
+
+def _normalize_fractions(text):
+    """Replace Unicode fraction characters with ASCII equivalents."""
+    if not text:
+        return text
+    for uc, asc in _UNICODE_FRACTIONS.items():
+        text = text.replace(uc, asc)
+    return text
+
+
+def _read_csv_text(csv_path):
+    """Read a CSV file, trying UTF-8-BOM first then Windows-1252 fallback.
+    Returns the full file text as a string with fractions normalised."""
+    for enc in ("utf-8-sig", "cp1252", "latin-1"):
+        try:
+            text = open(csv_path, newline="", encoding=enc).read()
+            return _normalize_fractions(text)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    # Last resort — replace undecodable bytes
+    text = open(csv_path, newline="", encoding="utf-8-sig", errors="replace").read()
+    return _normalize_fractions(text)
+
+
+def parse_rm_csv(csv_path):
+    """Parse a Recipe Manager CSV export — full fidelity."""
+    recipes = []
+    with io.StringIO(_read_csv_text(csv_path)) as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            title = (row.get("title") or "").strip()
+            if not title:
+                continue
+            try:
+                ig = json.loads(row.get("ingredient_groups") or "[]")
+            except Exception:
+                ig = [{"purpose": None, "ingredients": []}]
+            try:
+                sg = json.loads(row.get("instruction_groups") or "[]")
+            except Exception:
+                sg = [{"purpose": None, "steps": []}]
+            image = _image_from_import(row.get("image") or "")
+            srv_num_raw = (row.get("servings_num") or "").strip()
+            try:
+                srv_num = float(srv_num_raw) if srv_num_raw else None
+            except ValueError:
+                srv_num = None
+            flat_ings  = [i for g in ig for i in g.get("ingredients", [])]
+            flat_steps = [s for g in sg for s in g.get("steps", [])]
+            # Parse categories — prefer JSON array column, fall back to single category
+            cats_raw = (row.get("categories") or "").strip()
+            try:
+                cats = json.loads(cats_raw) if cats_raw else []
+                if not isinstance(cats, list):
+                    cats = [str(cats)] if cats else []
+            except Exception:
+                cats = [cats_raw] if cats_raw else []
+            if not cats:
+                single = (row.get("category") or "").strip()
+                cats = [single] if single else []
+            cats = [c for c in cats if c][:5]
+            recipes.append({
+                "title":              title,
+                "categories":         cats,
+                "category":           cats[0] if cats else None,
+                "servings":           (row.get("servings") or "").strip() or None,
+                "servings_num":       srv_num,
+                "total_time":         (row.get("total_time") or "").strip() or None,
+                "source_url":         (row.get("source_url") or "").strip() or None,
+                "site_name":          (row.get("site_name") or "").strip() or None,
+                "image":              image,
+                "ingredients":        flat_ings,
+                "instructions":       flat_steps,
+                "ingredient_groups":  ig,
+                "instruction_groups": sg,
+            })
+    return recipes
+
+
+def parse_accuchef_csv(csv_path):
+    """Parse an AccuChef exported CSV (no header row, 63 fixed columns)."""
+    recipes = []
+    with io.StringIO(_read_csv_text(csv_path)) as f:
+        reader = csv.reader(f)
+        for row in reader:
+            if len(row) < 9:
+                continue
+            title = row[0].strip()
+            if not title:
+                continue
+            category      = row[1].strip() or None
+            servings_str  = row[3].strip()
+            servings_unit = row[4].strip()
+            time_str      = row[5].strip()
+            servings = f"{servings_str} {servings_unit}".strip() if servings_unit else servings_str
+            instructions_raw = row[-1].strip()
+            ingredient_cols  = row[7:-1]
+            raw_ings = [c.strip() for c in ingredient_cols if c.strip() and c.strip() != " "]
+            ing_groups    = []
+            current_group = {"purpose": None, "ingredients": []}
+            for ing in raw_ings:
+                if re.match(r'^-{3,}', ing):
+                    if current_group["ingredients"] or current_group["purpose"]:
+                        ing_groups.append(current_group)
+                    purpose = re.sub(r'^[-=\s]+|[-=\s]+$', '', ing).strip() or None
+                    current_group = {"purpose": purpose, "ingredients": []}
+                else:
+                    current_group["ingredients"].append(ing)
+            if current_group["ingredients"] or not ing_groups:
+                ing_groups.append(current_group)
+            step_groups = [{"purpose": None, "steps": [instructions_raw]}] if instructions_raw else [{"purpose": None, "steps": []}]
+            flat_ings  = [i for g in ing_groups for i in g["ingredients"]]
+            flat_steps = [s for g in step_groups for s in g["steps"]]
+            total_time = time_str if time_str and time_str not in (":", "00:00", ":00") else None
+            recipes.append({
+                "title":              title,
+                "servings":           servings,
+                "servings_num":       parse_servings_num(servings_str),
+                "ingredients":        flat_ings,
+                "instructions":       flat_steps,
+                "ingredient_groups":  ing_groups,
+                "instruction_groups": step_groups,
+                "image":              None,
+                "total_time":         total_time,
+                "site_name":          "AccuChef Import",
+                "source_url":         None,
+                "category":           category,
+            })
+    return recipes
+
+
+def detect_and_parse_csv(csv_path):
+    """Auto-detect RM vs AccuChef CSV and return (type_str, recipes)."""
+    with io.StringIO(_read_csv_text(csv_path)) as f:
+        reader = csv.reader(f)
+        for row in reader:
+            if not any(c.strip() for c in row):
+                continue        # skip blank rows
+            if row and row[0].strip().lower() == "rm_version":
+                return "rm", parse_rm_csv(csv_path)
+            else:
+                return "accuchef", parse_accuchef_csv(csv_path)
+    return "accuchef", []
+
+
+# ── Open folder & Import ───────────────────────────────────────────────────────
+
+@app.route("/open-folder", methods=["POST"])
+def open_folder():
+    """Open the cookbooks folder in the OS file explorer."""
+    os.makedirs(COOKBOOKS_DIR, exist_ok=True)
+    try:
+        if sys.platform == "win32":
+            os.startfile(COOKBOOKS_DIR)
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", COOKBOOKS_DIR])
+        else:
+            subprocess.Popen(["xdg-open", COOKBOOKS_DIR])
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/cookbooks/upload-temp", methods=["POST"])
+def upload_temp_cookbook():
+    """
+    Accept a file upload (.cookbook or .RWZ), save to a temp path,
+    peek at it, and return info — used by the HTML file-input fallback.
+    """
+    import tempfile
+    if "file" not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+    f   = request.files["file"]
+    ext = os.path.splitext(f.filename or "")[1].lower()
+    if ext not in (".cookbook", ".csv"):
+        return jsonify({"error": "Unsupported file type. Use .cookbook or .csv"}), 400
+    tmp = tempfile.NamedTemporaryFile(suffix=ext, delete=False, dir=DATA_DIR)
+    f.save(tmp.name)
+    tmp.close()
+    suggested = os.path.splitext(f.filename)[0]
+    if ext == ".cookbook":
+        try:
+            with sqlite3.connect(tmp.name) as c:
+                count = c.execute("SELECT COUNT(*) FROM recipes").fetchone()[0]
+        except Exception:
+            count = 0
+        file_type = "cookbook"
+    else:
+        csv_type, recipes = detect_and_parse_csv(tmp.name)
+        count     = len(recipes)
+        file_type = "csv_rm" if csv_type == "rm" else "csv"
+    return jsonify({"tempPath": tmp.name, "type": file_type,
+                    "recipeCount": count, "suggestedName": suggested})
+
+
+@app.route("/cookbooks/peek", methods=["POST"])
+def peek_cookbook():
+    """
+    Inspect a file before importing — returns recipe count and detected type
+    without making any changes.
+    """
+    data = request.get_json()
+    path = (data.get("path") or "").strip()
+    if not path or not os.path.exists(path):
+        return jsonify({"error": "File not found"}), 404
+    ext = os.path.splitext(path)[1].lower()
+    if ext == ".cookbook":
+        try:
+            c = sqlite3.connect(path)
+            count = c.execute("SELECT COUNT(*) FROM recipes").fetchone()[0]
+            c.close()
+        except Exception:
+            count = 0
+        return jsonify({"type": "cookbook", "recipeCount": count,
+                        "suggestedName": os.path.splitext(os.path.basename(path))[0]})
+    elif ext == ".csv":
+        csv_type, recipes = detect_and_parse_csv(path)
+        display_type = "csv_rm" if csv_type == "rm" else "csv"
+        return jsonify({"type": display_type, "recipeCount": len(recipes),
+                        "suggestedName": os.path.splitext(os.path.basename(path))[0]})
+    else:
+        return jsonify({"error": "Unsupported file type. Use .cookbook or .csv"}), 400
+
+
+@app.route("/cookbooks/import", methods=["POST"])
+def import_cookbook():
+    """Import a .cookbook or AccuChef .RWZ file into the cookbooks folder."""
+    data     = request.get_json()
+    src_path = (data.get("path") or "").strip()
+    name     = (data.get("name") or "").strip()
+    if not src_path or not os.path.exists(src_path):
+        return jsonify({"error": "Source file not found"}), 404
+    if not name:
+        return jsonify({"error": "Cookbook name required"}), 400
+    safe      = re.sub(r'[\\/:*?"<>|]', "", name).strip()
+    dest_path = os.path.join(COOKBOOKS_DIR, safe + ".cookbook")
+    if os.path.exists(dest_path):
+        return jsonify({"error": "A cookbook with that name already exists"}), 409
+    ext = os.path.splitext(src_path)[1].lower()
+    if ext == ".cookbook":
+        import shutil
+        shutil.copy2(src_path, dest_path)
+        try:
+            with sqlite3.connect(dest_path) as c:
+                count = c.execute("SELECT COUNT(*) FROM recipes").fetchone()[0]
+        except Exception:
+            count = 0
+        return jsonify({"ok": True, "name": safe, "path": dest_path, "recipeCount": count})
+    elif ext == ".csv":
+        _csv_type, recipes = detect_and_parse_csv(src_path)
+        if not recipes:
+            return jsonify({"error": "No recipes could be read from this CSV file."}), 422
+        # Create the new cookbook and populate it
+        old_path = _active_db["path"]
+        _active_db["path"] = dest_path
+        init_db()
+        _active_db["path"] = old_path          # restore — caller must switch explicitly
+        conn = sqlite3.connect(dest_path)
+        for r in recipes:
+            ig = r.get("ingredient_groups")
+            sg = r.get("instruction_groups")
+            conn.execute(
+                """INSERT INTO recipes
+                   (title,servings,servings_num,ingredients,instructions,
+                    ingredient_groups,instruction_groups,image,total_time,
+                    site_name,source_url,category)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (r["title"], r.get("servings"), r.get("servings_num"),
+                 json.dumps(r.get("ingredients", [])),
+                 json.dumps(r.get("instructions", [])),
+                 json.dumps(ig) if ig else None,
+                 json.dumps(sg) if sg else None,
+                 r.get("image"), r.get("total_time"),
+                 r.get("site_name"), r.get("source_url"), r.get("category")),
+            )
+        conn.commit()
+        conn.close()
+        return jsonify({"ok": True, "name": safe, "path": dest_path,
+                        "recipeCount": len(recipes)})
+    else:
+        return jsonify({"error": "Unsupported file type"}), 400
+
+
+@app.route("/cookbooks/export", methods=["POST"])
+def export_cookbook_route():
+    """Export a cookbook's recipes to AccuChef-compatible CSV, saved to Downloads."""
+    import pathlib
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "Cookbook name required"}), 400
+    cb_path = os.path.join(COOKBOOKS_DIR, name + ".cookbook")
+    if not os.path.exists(cb_path):
+        return jsonify({"error": "Cookbook not found"}), 404
+    try:
+        csv_content = export_cookbook_csv(cb_path)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    # Save to user's Downloads folder (or Desktop as fallback)
+    safe_name = re.sub(r'[^\w\s\-]', '', name).strip() or "cookbook"
+    downloads = pathlib.Path.home() / "Downloads"
+    if not downloads.exists():
+        downloads = pathlib.Path.home() / "Desktop"
+    out_path = downloads / (safe_name + ".csv")
+    try:
+        out_path.write_text(csv_content, encoding="utf-8-sig")
+    except Exception as e:
+        return jsonify({"error": f"Could not write file: {e}"}), 500
+    return jsonify({"ok": True, "path": str(out_path)})
+
+
 if __name__ == "__main__":
     os.makedirs(os.path.join(BASE_DIR, "static"), exist_ok=True)
-    init_db()
+    startup()
     app.run(debug=True, port=5000)
