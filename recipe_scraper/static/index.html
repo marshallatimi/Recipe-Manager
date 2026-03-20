@@ -78,7 +78,7 @@
     html { font-size: calc(16px * var(--font-scale)); }
     body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
-    header { background: var(--header-bg); color: #fff; position: sticky; top: 36px; z-index: 200; }
+    header { background: var(--header-bg); color: #fff; position: sticky; top: 0; z-index: 200; }
     .header-top { display: flex; align-items: center; gap: 0.35rem; padding: clamp(0.28rem,0.6vw,0.45rem) clamp(0.5rem,1.5vw,1rem); flex-wrap: wrap; }
     .tab-btn { padding: clamp(0.28rem,0.7vw,0.42rem) clamp(0.45rem,1.3vw,0.95rem); border: 2px solid rgba(255,255,255,0.5); border-radius: 6px; background: transparent; color: #fff; font-size: clamp(0.7rem,1.4vw,0.88rem); font-weight: 600; cursor: pointer; transition: background 0.15s; white-space: nowrap; }
     .tab-btn:hover { background: rgba(255,255,255,0.15); }
@@ -427,53 +427,11 @@
     .import-preview-box { background:var(--bg); border-radius:8px; padding:0.85rem 1rem; margin:0.8rem 0 1rem; font-size:0.88rem; line-height:1.7; border:1px solid var(--border); }
     .import-preview-box strong { color:var(--text); }
 
-    /* ── Custom title bar (pywebview frameless) ───────────────── */
-    #custom-titlebar {
-      position: fixed; top: 0; left: 0; right: 0;
-      height: 36px;
-      background: var(--header-bg);
-      display: flex; align-items: center;
-      z-index: 99999;
-      -webkit-app-region: no-drag;
-      user-select: none;
-      padding: 0 4px 0 10px;
-      gap: 8px;
-    }
-    .tb-logo { flex-shrink:0; display:flex; align-items:center; -webkit-app-region: drag; }
-    .tb-title { color:#fff; font-size:0.82rem; font-weight:700; letter-spacing:0.2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; -webkit-app-region: drag; }
-    .tb-controls { display:flex; align-items:stretch; height:36px; margin-left:auto; -webkit-app-region:no-drag; flex-shrink:0; }
-    .tb-btn { background:none; border:none; color:rgba(255,255,255,0.85); width:46px; height:36px; cursor:pointer; font-size:0.9rem; display:flex; align-items:center; justify-content:center; transition:background 0.12s; font-family:inherit; }
-    .tb-btn:hover { background:rgba(255,255,255,0.15); color:#fff; }
-    .tb-btn.tb-close:hover { background:#e81123; color:#fff; }
-
-    /* Push app content below the title bar */
-    body { padding-top: 36px; }
     @media print { .no-print { display: none !important; } }
   </style>
 </head>
 <body>
 
-<!-- Custom title bar — only visible in the pywebview desktop app -->
-<div id="custom-titlebar">
-  <div class="tb-logo">
-    <svg width="22" height="22" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <!-- Pan body: wide shallow oval -->
-      <ellipse cx="10" cy="20" rx="9" ry="7" fill="rgba(255,255,255,0.92)"/>
-      <!-- Inner cooking surface: background-colour cutout shows the rim depth -->
-      <ellipse cx="10" cy="13" rx="7.5" ry="3.2" fill="var(--header-bg)"/>
-      <!-- Handle: tapered polygon angling to upper-right -->
-      <polygon points="17,14.5 19.5,17.5 30.5,5.5 28.5,3" fill="rgba(255,255,255,0.92)"/>
-      <!-- Rounded grip cap -->
-      <ellipse cx="29" cy="4.2" rx="2" ry="1.8" fill="rgba(255,255,255,0.92)"/>
-    </svg>
-  </div>
-  <span class="tb-title">Macleay Recipe Manager</span>
-  <div class="tb-controls">
-    <button class="tb-btn" title="Minimise" onclick="tbApi('minimize_window')">&#x2212;</button>
-    <button class="tb-btn" id="tb-max-btn" title="Maximise" onclick="tbApi('maximize_window')">&#x25A1;</button>
-    <button class="tb-btn tb-close" title="Close" onclick="tbApi('close_window')">&#x2715;</button>
-  </div>
-</div>
 
 <header>
   <div class="header-top">
@@ -2985,42 +2943,6 @@ function fileExit() {
   else { window.close(); }
 }
 
-// ── Custom title bar (pywebview frameless) ──────────────────
-function tbApi(method) {
-  // pywebview API is injected asynchronously — retry a few times if not ready yet
-  if (window.pywebview && window.pywebview.api && window.pywebview.api[method]) {
-    window.pywebview.api[method]();
-  } else {
-    let attempts = 0;
-    const t = setInterval(() => {
-      attempts++;
-      if (window.pywebview && window.pywebview.api && window.pywebview.api[method]) {
-        window.pywebview.api[method]();
-        clearInterval(t);
-      } else if (attempts > 20) {
-        clearInterval(t);
-      }
-    }, 100);
-  }
-}
-// Disable drag region when maximised so you can't accidentally un-maximise
-// by clicking/dragging the title area; re-enable when restored.
-function syncTitleBarDrag() {
-  // Python sets data-win-maximized via evaluate_js on maximize/restore — this
-  // is the ground truth. Fall back to dimension check before Python has set it.
-  const pyMaximised  = document.body.dataset.winMaximized === "1";
-  const dimMaximised = window.outerWidth  >= screen.availWidth  - 4 &&
-                       window.outerHeight >= screen.availHeight - 4;
-  const maximised = pyMaximised || dimMaximised;
-  const region = maximised ? "no-drag" : "drag";
-  document.querySelectorAll(".tb-logo, .tb-title").forEach(el => {
-    el.style.webkitAppRegion = region;
-  });
-  const btn = document.getElementById("tb-max-btn");
-  if (btn) btn.textContent = maximised ? "\u2750" : "\u25A1";
-}
-window.addEventListener("resize", syncTitleBarDrag);
-document.addEventListener("DOMContentLoaded", syncTitleBarDrag);
 
 // ══════════════════════════════════════════════════════════════
 // Cookbooks tab

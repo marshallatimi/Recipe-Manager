@@ -14,9 +14,6 @@ import time
 import shutil
 import webview
 
-# Track maximize state manually (win.maximized property is unreliable on some systems)
-_maximized = [False]
-
 
 def _find_edge() -> str:
     """Return the best available path to the Microsoft Edge executable."""
@@ -179,29 +176,6 @@ class FileApi:
                     os.unlink(tmp)
                 except OSError:
                     pass
-
-    def minimize_window(self):
-        webview.windows[0].minimize()
-
-    def maximize_window(self):
-        win = webview.windows[0]
-        try:
-            if _maximized[0]:
-                win.restore()
-                _maximized[0] = False
-                win.evaluate_js(
-                    "document.body.dataset.winMaximized='0';"
-                    "typeof syncTitleBarDrag==='function'&&syncTitleBarDrag();"
-                )
-            else:
-                win.maximize()
-                _maximized[0] = True
-                win.evaluate_js(
-                    "document.body.dataset.winMaximized='1';"
-                    "typeof syncTitleBarDrag==='function'&&syncTitleBarDrag();"
-                )
-        except Exception:
-            pass
 
     def close_window(self):
         webview.windows[0].destroy()
@@ -406,20 +380,12 @@ def main() -> None:
         height=860,
         min_size=(900, 600),
         js_api=FileApi(),
-        frameless=True,
     )
 
     def on_shown():
         """Maximize the window and apply the pan icon once the native handle is available."""
-        # Start maximized
         try:
             webview.windows[0].maximize()
-            _maximized[0] = True
-            # Push maximised state into the page so drag is disabled immediately
-            webview.windows[0].evaluate_js(
-                "document.body.dataset.winMaximized='1';"
-                "typeof syncTitleBarDrag==='function'&&syncTitleBarDrag();"
-            )
         except Exception:
             pass
         if icon_path:
