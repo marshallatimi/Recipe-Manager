@@ -387,6 +387,7 @@
     .shop-recipe-meta { font-size:0.75rem; color:var(--muted); margin-top:0.1rem; }
 
     /* Custom prompt modal */
+    .prompt-modal { background:var(--card); border-radius:14px; padding:1.6rem 1.8rem; width:min(400px,92vw); box-shadow:0 8px 40px rgba(0,0,0,0.28); color:var(--text); }
     .prompt-modal-msg { font-size:0.97rem; color:var(--text); margin-bottom:0.9rem; font-weight:500; line-height:1.4; }
     .prompt-modal-input { width:100%; padding:0.6rem 0.85rem; border:2px solid var(--border); border-radius:8px; font-size:1rem; font-family:inherit; background:var(--card); color:var(--text); outline:none; transition:border-color 0.2s; }
     .prompt-modal-input:focus { border-color:var(--red); }
@@ -433,13 +434,13 @@
       background: var(--header-bg);
       display: flex; align-items: center;
       z-index: 99999;
-      -webkit-app-region: drag;
+      -webkit-app-region: no-drag;
       user-select: none;
       padding: 0 4px 0 10px;
       gap: 8px;
     }
-    .tb-logo { flex-shrink:0; display:flex; align-items:center; }
-    .tb-title { color:#fff; font-size:0.82rem; font-weight:700; letter-spacing:0.2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; }
+    .tb-logo { flex-shrink:0; display:flex; align-items:center; -webkit-app-region: drag; }
+    .tb-title { color:#fff; font-size:0.82rem; font-weight:700; letter-spacing:0.2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; -webkit-app-region: drag; }
     .tb-controls { display:flex; align-items:stretch; height:36px; margin-left:auto; -webkit-app-region:no-drag; flex-shrink:0; }
     .tb-btn { background:none; border:none; color:rgba(255,255,255,0.85); width:46px; height:36px; cursor:pointer; font-size:0.9rem; display:flex; align-items:center; justify-content:center; transition:background 0.12s; font-family:inherit; }
     .tb-btn:hover { background:rgba(255,255,255,0.15); color:#fff; }
@@ -447,6 +448,7 @@
 
     /* Push app content below the title bar */
     body { padding-top: 36px; }
+    @media print { .no-print { display: none !important; } }
   </style>
 </head>
 <body>
@@ -532,9 +534,12 @@
           <option value="mostused">Most Used</option>
         </select>
         <label>Category:</label>
-        <select id="cat-filter" onchange="applySort()">
-          <option value="">All</option>
-        </select>
+        <input type="text" id="cat-filter" list="cat-filter-list"
+          oninput="applySort()" onchange="applySort()"
+          placeholder="All categories"
+          autocomplete="off"
+          style="padding:0.3rem 0.55rem;border:1px solid var(--border);border-radius:5px;background:var(--card);color:var(--text);font-size:0.82rem;width:140px">
+        <datalist id="cat-filter-list"></datalist>
       </div>
       <div class="grid-controls-right">
         <button class="btn btn-ghost" style="font-size:0.88rem;padding:0.45rem 1rem" onclick="openImportRecipesModal()">📥 Import</button>
@@ -1058,13 +1063,13 @@ async function loadSavedRecipes() {
 }
 
 function updateCatFilter() {
-  const sel = document.getElementById("cat-filter");
-  if (!sel) return;
+  const inp = document.getElementById("cat-filter");
+  const dl  = document.getElementById("cat-filter-list");
+  if (!inp || !dl) return;
   const cats = [...new Set(savedRecipes.flatMap(r => r.categories && r.categories.length ? r.categories : (r.category ? [r.category] : [])))].filter(Boolean).sort();
-  const prev = sel.value;
-  sel.innerHTML = `<option value="">All</option>` + cats.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
-  sel.value = cats.includes(prev) ? prev : "";
-  currentCatFilter = sel.value;
+  dl.innerHTML = cats.map(c => `<option value="${esc(c)}">`).join("");
+  if (!cats.includes(inp.value)) { inp.value = ""; currentCatFilter = ""; }
+  else currentCatFilter = inp.value;
 }
 
 function applySort() {
@@ -1338,6 +1343,17 @@ async function patchMeal() {
   showToast();
 }
 
+async function removeRecipePhoto() {
+  if (!selectedRecipe) return;
+  if (!await showConfirm("Remove this photo?")) return;
+  await fetch(`/recipes/${selectedRecipe.id}/image`, { method: "DELETE" });
+  selectedRecipe.image = null;
+  const idx = savedRecipes.findIndex(r => r.id === selectedRecipe.id);
+  if (idx !== -1) savedRecipes[idx].image = null;
+  renderSavedDetail();
+  showToast("Photo removed");
+}
+
 function openImageModal() {
   document.getElementById("img-file-input").value = "";
   document.getElementById("img-url-input").value = "";
@@ -1416,6 +1432,21 @@ function makeInlineInput(el, currentVal, onSave, opts={}) {
     if (!opts.textarea && e.key === "Enter") { e.preventDefault(); inp.blur(); }
     if (e.key === "Escape") renderSavedDetail();
   });
+}
+
+async function saveRecipeNotes(val) {
+  if (!selectedRecipe) return;
+  selectedRecipe.notes = val;
+  const idx = savedRecipes.findIndex(r => r.id === selectedRecipe.id);
+  if (idx !== -1) savedRecipes[idx].notes = val;
+  clearTimeout(saveRecipeNotes._t);
+  saveRecipeNotes._t = setTimeout(async () => {
+    await fetch(`/recipes/${selectedRecipe.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...selectedRecipe }),
+    });
+  }, 600);
 }
 
 function inlineEditTitle(el) {
@@ -1845,14 +1876,22 @@ function buildSavedHTML(r) {
   const ig = r.ingredient_groups || [{purpose:null, ingredients:r.ingredients||[]}];
   const sg = r.instruction_groups || [{purpose:null, steps:r.instructions||[]}];
   const heroHtml = r.image
-    ? `<div class="hero-wrap" onclick="openImageModal()">
-         <img class="hero" src="${esc(r.image)}" alt="${esc(r.title)}"/>
-         <div class="hero-change-overlay"><span>Change Photo</span></div>
-       </div>`
+    ? `<div class="hero-wrap">
+       <img class="hero" src="${esc(r.image)}" alt="${esc(r.title)}" onclick="openImageModal()" style="cursor:pointer"/>
+       <div class="hero-change-overlay" onclick="openImageModal()"><span>Change Photo</span></div>
+       <button class="hero-remove-btn" onclick="removeRecipePhoto()" title="Remove photo" style="-webkit-app-region:no-drag;position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:28px;height:28px;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;z-index:5">✕</button>
+     </div>`
     : `<button class="hero-placeholder-btn" onclick="openImageModal()">+ Add Photo</button>`;
   const linkHtml = r.source_url ? `<a class="site-badge" href="${esc(r.source_url)}" target="_blank" rel="noopener" style="text-decoration:none">${esc(r.source_url)}</a><br>` : "";
   const multiIngGroup = ig.length > 1 || (ig[0] && ig[0].purpose);
   const multiStepGroup = sg.length > 1 || (sg[0] && sg[0].purpose);
+  const notesHtml = `<div class="notes-section no-print" style="margin:0.8rem 0 0.4rem;padding:0.7rem 0.9rem;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
+    <div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin-bottom:0.35rem">Notes <span style="font-weight:400;text-transform:none;letter-spacing:0;opacity:0.7">(private, not printed)</span></div>
+    <div class="editable-span" contenteditable="true" id="recipe-notes-field"
+      style="font-size:0.88rem;color:var(--text);min-height:1.5em;outline:none;white-space:pre-wrap"
+      oninput="saveRecipeNotes(this.value)"
+      data-placeholder="Add private notes…">${esc(r.notes || "")}</div>
+  </div>`;
 
   return `<div class="recipe-card">${heroHtml}<div class="card-body">
     <div class="recipe-toolbar">
@@ -1871,6 +1910,7 @@ function buildSavedHTML(r) {
         <div>${buildCategoryTagsHTML("saved", r.categories && r.categories.length ? r.categories : (r.category ? [r.category] : []))}</div>
       </div>
     </div>
+    ${notesHtml}
 
     <div class="section-title">Ingredients</div>
     ${buildIngGroupsEditable(ig)}
@@ -2146,8 +2186,20 @@ function openImportRecipesModal() {
 }
 
 function closeImportRecipesModal(e) {
-  if (!e || e.target === document.getElementById("import-recipes-modal-backdrop"))
+  if (!e || e.target === document.getElementById("import-recipes-modal-backdrop")) {
     document.getElementById("import-recipes-modal-backdrop").hidden = true;
+    const btn = document.getElementById("ir-import-btn");
+    if (btn) { btn.disabled = false; btn.textContent = "Import"; btn.hidden = true; }
+    const status = document.getElementById("ir-status");
+    if (status) status.textContent = "";
+    const preview = document.getElementById("ir-preview");
+    if (preview) preview.hidden = true;
+    const fname = document.getElementById("ir-file-name");
+    if (fname) fname.textContent = "No file chosen";
+    const finput = document.getElementById("ir-file-input");
+    if (finput) finput.value = "";
+    _irSelectedFile = null;
+  }
 }
 
 async function handleIRFileSelect(input) {
@@ -3364,6 +3416,12 @@ function renderMealDetail() {
           onchange="updateMealDefaultServings(this.value)"/>
         <span style="font-size:0.78rem;color:var(--muted)">Override per recipe below ↓</span>
       </div>
+      <div class="notes-section no-print" style="margin:0.8rem 0 0.4rem;padding:0.7rem 0.9rem;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
+        <div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin-bottom:0.35rem">Notes <span style="font-weight:400;text-transform:none;letter-spacing:0;opacity:0.7">(private, not printed)</span></div>
+        <div class="editable-span" contenteditable="true"
+          style="font-size:0.88rem;color:var(--text);min-height:1.5em;outline:none;white-space:pre-wrap"
+          oninput="saveMealNotes(${m.id}, this.value)">${esc(m.notes || "")}</div>
+      </div>
       <div class="section-title" style="margin-top:1rem">Recipes</div>
       <div id="meal-recipe-list" class="detail-scroll-list">${recipeRows}</div>
       ${addRow}
@@ -3463,6 +3521,20 @@ async function setMealRecipeServings(rid, val) {
       body: JSON.stringify({servings: srv})
     });
   }, 400);
+}
+
+async function saveMealNotes(mid, val) {
+  const m = savedMeals.find(x => x.id === mid);
+  if (!m) return;
+  m.notes = val;
+  clearTimeout(saveMealNotes._t);
+  saveMealNotes._t = setTimeout(async () => {
+    await fetch(`/meals/${mid}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: m.name, categories: m.categories, default_servings: m.default_servings, notes: m.notes }),
+    });
+  }, 600);
 }
 
 async function updateMealDefaultServings(val) {
@@ -3751,8 +3823,10 @@ function combineIngredients(allIngredients) {
   return result;
 }
 
-function printShoppingList() {
-  const html = buildShoppingHtml(shoppingList, "Shopping List");
+async function printShoppingList() {
+  const name = await showPrompt("Name for this shopping list:", "Shopping List");
+  if (name === null) return;
+  const html = buildShoppingHtml(shoppingList, name || "Shopping List");
   if (html) doPrint(html);
 }
 
@@ -3799,10 +3873,12 @@ function exportMealPdf() {
   exportPdf(html, m.name || "meal");
 }
 
-function exportShoppingPdf() {
-  const html = buildShoppingHtml(shoppingList, "Shopping List");
+async function exportShoppingPdf() {
+  const name = await showPrompt("Name for this shopping list PDF:", "Shopping List");
+  if (name === null) return;
+  const html = buildShoppingHtml(shoppingList, name || "Shopping List");
   if (!html) return;
-  exportPdf(html, "shopping-list");
+  exportPdf(html, name || "shopping-list");
 }
 
 // Shared: build a full HTML doc for a set of recipes (same format as printMeal)
@@ -3939,8 +4015,7 @@ function renderGroupMealDetail() {
   const g = selectedGroupMeal;
   if (!g) return;
   const content = document.getElementById("groupmeal-detail-content");
-  const inGroupIds = new Set((g.meals||[]).map(m => m.id));
-  const available = savedMeals.filter(m => !inGroupIds.has(m.id));
+  const available = savedMeals;
 
   const mealRows = (!g.meals || !g.meals.length)
     ? `<p style="color:var(--muted);font-size:0.9rem;padding:0.5rem 0">No meals yet. Add some below.</p>`
@@ -3969,7 +4044,7 @@ function renderGroupMealDetail() {
             <input type="number" class="gm-srv-input" min="0.5" step="0.5"
               placeholder="${rph}" value="${rval}"
               title="Servings for this recipe only"
-              onchange="updateGroupRecipeServings(${m.id}, ${r.id}, this.value)"/>
+              onchange="updateGroupRecipeServings(${m.slot_id != null ? m.slot_id : m.id}, ${r.id}, this.value, ${m.slot_id != null})"/>
           </div>`;
         }).join("") || `<div style="padding:0.5rem 1rem;font-size:0.82rem;color:var(--muted)">No recipes in this meal.</div>`;
 
@@ -3983,10 +4058,10 @@ function renderGroupMealDetail() {
               style="margin-left:auto"
               placeholder="${mealPh}" value="${mealVal}"
               title="Default servings for all recipes in this meal"
-              onchange="updateGroupMealServings(${m.id}, this.value)"
+              onchange="updateGroupMealServings(${m.slot_id != null ? m.slot_id : m.id}, this.value, ${m.slot_id != null})"
               onclick="event.stopPropagation()"/>
             <button class="del-btn" style="font-size:0.9rem;padding:0 4px;flex-shrink:0"
-              onclick="event.stopPropagation();removeMealFromGroupMeal(${m.id})">✕</button>
+              onclick="event.stopPropagation();removeMealFromGroupMeal(${m.slot_id != null ? m.slot_id : m.id}, ${m.slot_id != null})">✕</button>
           </div>
           <div class="gm-recipe-list${expanded?" open":""}" id="gm-rlist-${m.id}"
             onclick="event.stopPropagation()">
@@ -4044,9 +4119,8 @@ function renderGroupMealDetail() {
 function renderGroupMealBrowser() {
   const browser = document.getElementById("gm-meal-browser");
   if (!browser || !selectedGroupMeal) return;
-  const inGroupIds = new Set((selectedGroupMeal.meals||[]).map(m => m.id));
   const q = (document.getElementById("gm-meal-search")?.value || "").toLowerCase();
-  const matches = savedMeals.filter(m => !inGroupIds.has(m.id) && (!q || m.name.toLowerCase().includes(q)));
+  const matches = savedMeals.filter(m => !q || m.name.toLowerCase().includes(q));
   browser.innerHTML = matches.length
     ? matches.map(m => `
         <div class="shop-recipe-row" onclick="addMealToGroupMeal(${m.id})">
@@ -4077,39 +4151,51 @@ async function updateGroupDefaultServings(val) {
   });
 }
 
-async function updateGroupMealServings(mealId, val) {
+async function updateGroupMealServings(slotOrMealId, val, useSlot) {
   const g = selectedGroupMeal;
   if (!g) return;
   const srv = val && parseFloat(val) > 0 ? parseFloat(val) : null;
-  const m = (g.meals||[]).find(m => m.id === mealId);
+  const m = useSlot
+    ? (g.meals||[]).find(m => m.slot_id === slotOrMealId)
+    : (g.meals||[]).find(m => m.id === slotOrMealId);
   if (m) m.servings = srv;
-  await fetch(`/group-meals/${g.id}/meals/${mealId}`, {
+  const url = useSlot
+    ? `/group-meals/${g.id}/slots/${slotOrMealId}`
+    : `/group-meals/${g.id}/meals/${slotOrMealId}`;
+  await fetch(url, {
     method:"PATCH", headers:{"Content-Type":"application/json"},
     body: JSON.stringify({servings: srv})
   });
   // Refresh recipe-level placeholders for this meal (reflect new meal default)
-  const full = savedMeals.find(sm => sm.id === mealId);
-  if (full) {
-    (full.recipes||[]).forEach(r => {
-      const inp = document.querySelector(`#gm-rlist-${mealId} .gm-recipe-row input[onchange*="${r.id}"]`);
-      if (inp && (inp.value === "" || inp.value == null)) {
-        const effBase = srv != null ? srv : (g.default_servings != null ? g.default_servings : null);
-        inp.placeholder = effBase != null ? `Meal default (${effBase})` : "Servings…";
-      }
-    });
+  if (m) {
+    const full = savedMeals.find(sm => sm.id === m.id);
+    if (full) {
+      (full.recipes||[]).forEach(r => {
+        const inp = document.querySelector(`#gm-rlist-${m.id} .gm-recipe-row input[onchange*="${r.id}"]`);
+        if (inp && (inp.value === "" || inp.value == null)) {
+          const effBase = srv != null ? srv : (g.default_servings != null ? g.default_servings : null);
+          inp.placeholder = effBase != null ? `Meal default (${effBase})` : "Servings…";
+        }
+      });
+    }
   }
 }
 
-async function updateGroupRecipeServings(mealId, recipeId, val) {
+async function updateGroupRecipeServings(slotOrMealId, recipeId, val, useSlot) {
   const g = selectedGroupMeal;
   if (!g) return;
-  const m = (g.meals||[]).find(m => m.id === mealId);
+  const m = useSlot
+    ? (g.meals||[]).find(m => m.slot_id === slotOrMealId)
+    : (g.meals||[]).find(m => m.id === slotOrMealId);
   if (!m) return;
   m.recipe_servings = m.recipe_servings || {};
   const srv = val && parseFloat(val) > 0 ? parseFloat(val) : null;
   if (srv != null) m.recipe_servings[recipeId] = srv;
   else delete m.recipe_servings[recipeId];
-  await fetch(`/group-meals/${g.id}/meals/${mealId}`, {
+  const url = useSlot
+    ? `/group-meals/${g.id}/slots/${slotOrMealId}`
+    : `/group-meals/${g.id}/meals/${slotOrMealId}`;
+  await fetch(url, {
     method:"PATCH", headers:{"Content-Type":"application/json"},
     body: JSON.stringify({servings: m.servings, recipe_servings: m.recipe_servings})
   });
@@ -4119,23 +4205,32 @@ async function addMealToGroupMeal(mealId) {
   const g = selectedGroupMeal;
   if (!g) return;
   const searchVal = document.getElementById("gm-meal-search")?.value || "";
-  await fetch(`/group-meals/${g.id}/meals`, {
+  const res = await fetch(`/group-meals/${g.id}/meals`, {
     method:"POST", headers:{"Content-Type":"application/json"},
     body: JSON.stringify({meal_id: mealId})
   });
+  const data = await res.json();
   const m = savedMeals.find(m => m.id === mealId);
-  if (m) { g.meals = g.meals || []; g.meals.push({id: m.id, name: m.name, servings: null, recipe_servings: {}}); }
+  if (m) {
+    g.meals = g.meals || [];
+    g.meals.push({slot_id: data.slot_id, id: m.id, name: m.name, servings: null, recipe_servings: {}});
+  }
   renderGroupMealDetail();
   const inp = document.getElementById("gm-meal-search");
   if (inp && searchVal) { inp.value = searchVal; renderGroupMealBrowser(); }
   showToast();
 }
 
-async function removeMealFromGroupMeal(mealId) {
+async function removeMealFromGroupMeal(slotOrMealId, useSlot) {
   const g = selectedGroupMeal;
   if (!g) return;
-  await fetch(`/group-meals/${g.id}/meals/${mealId}`, {method:"DELETE"});
-  g.meals = (g.meals||[]).filter(m => m.id !== mealId);
+  if (useSlot) {
+    await fetch(`/group-meals/${g.id}/slots/${slotOrMealId}`, {method:"DELETE"});
+    g.meals = (g.meals||[]).filter(m => m.slot_id !== slotOrMealId);
+  } else {
+    await fetch(`/group-meals/${g.id}/meals/${slotOrMealId}`, {method:"DELETE"});
+    g.meals = (g.meals||[]).filter(m => m.id !== slotOrMealId);
+  }
   renderGroupMealDetail();
   showToast();
 }

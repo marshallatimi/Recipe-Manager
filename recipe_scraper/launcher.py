@@ -11,7 +11,29 @@ import socket
 import subprocess
 import threading
 import time
+import shutil
 import webview
+
+# Track maximize state manually (win.maximized property is unreliable on some systems)
+_maximized = [False]
+
+
+def _find_edge() -> str:
+    """Return the best available path to the Microsoft Edge executable."""
+    candidates = [
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        os.path.join(os.environ.get("LOCALAPPDATA",  ""), r"Microsoft\Edge\Application\msedge.exe"),
+        os.path.join(os.environ.get("PROGRAMFILES",  ""), r"Microsoft\Edge\Application\msedge.exe"),
+        os.path.join(os.environ.get("PROGRAMW6432",  ""), r"Microsoft\Edge\Application\msedge.exe"),
+    ]
+    for c in candidates:
+        if c and os.path.isfile(c):
+            return c
+    found = shutil.which("msedge") or shutil.which("msedge.exe")
+    if found:
+        return found
+    return "msedge"  # last resort — rely on PATH
 
 # ── Path setup ────────────────────────────────────────────────────────────────
 if getattr(sys, "frozen", False):
@@ -163,10 +185,15 @@ class FileApi:
 
     def maximize_window(self):
         win = webview.windows[0]
-        if win.maximized:
-            win.restore()
-        else:
-            win.maximize()
+        try:
+            if _maximized[0]:
+                win.restore()
+                _maximized[0] = False
+            else:
+                win.maximize()
+                _maximized[0] = True
+        except Exception:
+            pass
 
     def close_window(self):
         webview.windows[0].destroy()
@@ -190,12 +217,7 @@ class FileApi:
         out_dir = os.path.join(parent_dir, safe_folder)
         os.makedirs(out_dir, exist_ok=True)
 
-        edge_candidates = [
-            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
-            "msedge",
-        ]
-        edge_exe = next((c for c in edge_candidates if os.path.exists(c)), "msedge")
+        edge_exe = _find_edge()
 
         saved = []
         for entry in pdfs:
@@ -365,15 +387,18 @@ def main() -> None:
         min_size=(900, 600),
         js_api=FileApi(),
         frameless=True,
-        maximized=True,
     )
 
     def on_shown():
-        """Apply the pan icon once the native window handle is available."""
+        """Maximize the window and apply the pan icon once the native handle is available."""
+        # Start maximized
+        try:
+            webview.windows[0].maximize()
+            _maximized[0] = True
+        except Exception:
+            pass
         if icon_path:
             try:
-                # pywebview 6.x: window.native is the WinForms Form;
-                # .Handle.ToInt32() gives the HWND integer.
                 hwnd = webview.windows[0].native.Handle.ToInt32()
                 _set_taskbar_icon(hwnd, icon_path)
             except Exception:

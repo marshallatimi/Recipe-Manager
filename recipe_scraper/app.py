@@ -169,12 +169,14 @@ def init_db():
             )
         """)
         for col in ["ingredient_groups", "instruction_groups", "category TEXT DEFAULT NULL",
-                    "view_count INTEGER DEFAULT 0", "categories TEXT DEFAULT NULL"]:
+                    "view_count INTEGER DEFAULT 0", "categories TEXT DEFAULT NULL",
+                    "notes TEXT DEFAULT NULL"]:
             try:
                 conn.execute(f"ALTER TABLE recipes ADD COLUMN {col}")
             except Exception:
                 pass
-        for col in ["categories TEXT DEFAULT NULL", "default_servings REAL DEFAULT NULL"]:
+        for col in ["categories TEXT DEFAULT NULL", "default_servings REAL DEFAULT NULL",
+                    "notes TEXT DEFAULT NULL"]:
             try:
                 conn.execute(f"ALTER TABLE meals ADD COLUMN {col}")
             except Exception:
@@ -217,18 +219,70 @@ def init_db():
         for col in ["default_servings REAL DEFAULT NULL"]:
             try: conn.execute(f"ALTER TABLE group_meals ADD COLUMN {col}")
             except Exception: pass
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS group_meal_members (
-                group_id   INTEGER NOT NULL,
-                meal_id    INTEGER NOT NULL,
-                servings   REAL DEFAULT NULL,
-                sort_order INTEGER DEFAULT 0,
-                PRIMARY KEY (group_id, meal_id)
-            )
-        """)
-        for col in ["servings REAL DEFAULT NULL", "recipe_servings TEXT DEFAULT NULL"]:
-            try: conn.execute(f"ALTER TABLE group_meal_members ADD COLUMN {col}")
-            except Exception: pass
+        # group_meal_members – must allow the same meal multiple times in one group.
+        # Older DBs had PRIMARY KEY (group_id, meal_id); migrate to autoincrement row_id.
+        has_gmm = conn.execute(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='group_meal_members'"
+        ).fetchone()[0] > 0
+
+        if has_gmm:
+            # Table exists – check whether it already has the row_id column
+            has_row_id = False
+            try:
+                conn.execute("SELECT row_id FROM group_meal_members LIMIT 1")
+                has_row_id = True
+            except Exception:
+                pass
+
+            if not has_row_id:
+                # Old composite-PK schema: rename → create new → copy → drop old
+                conn.execute("ALTER TABLE group_meal_members RENAME TO group_meal_members_old")
+                conn.execute("""
+                    CREATE TABLE group_meal_members (
+                        row_id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                        group_id        INTEGER NOT NULL,
+                        meal_id         INTEGER NOT NULL,
+                        servings        REAL    DEFAULT NULL,
+                        sort_order      INTEGER DEFAULT 0,
+                        recipe_servings TEXT    DEFAULT NULL
+                    )
+                """)
+                try:
+                    conn.execute("""
+                        INSERT INTO group_meal_members
+                               (group_id, meal_id, servings, sort_order, recipe_servings)
+                        SELECT  group_id, meal_id, servings, sort_order, recipe_servings
+                        FROM    group_meal_members_old
+                    """)
+                except Exception:
+                    try:
+                        conn.execute("""
+                            INSERT INTO group_meal_members (group_id, meal_id)
+                            SELECT group_id, meal_id FROM group_meal_members_old
+                        """)
+                    except Exception:
+                        pass
+                conn.execute("DROP TABLE group_meal_members_old")
+            else:
+                # Already migrated – just add any missing optional columns
+                for col in ["servings REAL DEFAULT NULL", "recipe_servings TEXT DEFAULT NULL"]:
+                    try:
+                        conn.execute(f"ALTER TABLE group_meal_members ADD COLUMN {col}")
+                    except Exception:
+                        pass
+        else:
+            # Brand-new installation – create with row_id from the start
+            conn.execute("""
+                CREATE TABLE group_meal_members (
+                    row_id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    group_id        INTEGER NOT NULL,
+                    meal_id         INTEGER NOT NULL,
+                    servings        REAL    DEFAULT NULL,
+                    sort_order      INTEGER DEFAULT 0,
+                    recipe_servings TEXT    DEFAULT NULL
+                )
+            """)
+
         conn.commit()
 
 
@@ -689,7 +743,8 @@ def update_recipe(rid):
     db.execute(
         """UPDATE recipes
            SET title=?, servings=?, servings_num=?, ingredients=?, instructions=?,
-               ingredient_groups=?, instruction_groups=?, image=?, total_time=?, site_name=?, category=?, categories=?
+               ingredient_groups=?, instruction_groups=?, image=?, total_time=?, site_name=?,
+               category=?, categories=?, notes=?
            WHERE id=?""",
         (
             data.get("title"),
@@ -704,6 +759,7 @@ def update_recipe(rid):
             data.get("site_name"),
             category,
             json.dumps(cats) if cats else None,
+            data.get("notes") or None,
             rid,
         ),
     )
@@ -739,6 +795,21 @@ def update_image(rid):
         db.commit()
         return jsonify({"image": url})
     return jsonify({"error": "No image provided"}), 400
+
+
+@app.route("/recipes/<int:rid>/image", methods=["DELETE"])
+def delete_image(rid):
+    db = get_db()
+    # Also remove the physical file if it's a local upload
+    row = db.execute("SELECT image FROM recipes WHERE id=?", (rid,)).fetchone()
+    if row and row["image"] and row["image"].startswith("/static/uploads/"):
+        try:
+            os.remove(os.path.join(UPLOADS_DIR, os.path.basename(row["image"])))
+        except OSError:
+            pass
+    db.execute("UPDATE recipes SET image=NULL WHERE id=?", (rid,))
+    db.commit()
+    return jsonify({"ok": True})
 
 
 @app.route("/recipes/<int:rid>/view", methods=["POST"])
@@ -792,8 +863,9 @@ def update_meal(mid):
     db = get_db()
     cats, category = _categories_payload(data)
     ds = data.get("default_servings")
-    db.execute("UPDATE meals SET name=?, category=?, categories=?, default_servings=? WHERE id=?",
-               (data.get("name"), category, json.dumps(cats) if cats else None, ds, mid))
+    db.execute("UPDATE meals SET name=?, category=?, categories=?, default_servings=?, notes=? WHERE id=?",
+               (data.get("name"), category, json.dumps(cats) if cats else None, ds,
+                data.get("notes") or None, mid))
     db.commit()
     return jsonify({"ok": True})
 
@@ -845,10 +917,10 @@ def list_group_meals():
     result = []
     for g in groups:
         meals = db.execute(
-            """SELECT m.id, m.name, gm.servings, gm.recipe_servings
+            """SELECT gm.row_id AS slot_id, m.id, m.name, gm.servings, gm.recipe_servings
                FROM group_meal_members gm
                JOIN meals m ON m.id = gm.meal_id
-               WHERE gm.group_id = ? ORDER BY gm.sort_order""",
+               WHERE gm.group_id = ? ORDER BY gm.sort_order, gm.row_id""",
             (g["id"],)
         ).fetchall()
         meal_list = []
@@ -899,37 +971,35 @@ def add_meal_to_group(gid):
     data = request.get_json()
     mid = data.get("meal_id")
     db = get_db()
-    try:
-        db.execute("INSERT OR IGNORE INTO group_meal_members (group_id, meal_id) VALUES (?,?)", (gid, mid))
-        db.commit()
-    except Exception:
-        pass
-    return jsonify({"ok": True})
+    cur = db.execute(
+        "INSERT INTO group_meal_members (group_id, meal_id) VALUES (?,?)", (gid, mid)
+    )
+    db.commit()
+    return jsonify({"ok": True, "slot_id": cur.lastrowid})
 
 
-@app.route("/group-meals/<int:gid>/meals/<int:mid>", methods=["PATCH"])
-def patch_group_meal_member(gid, mid):
+@app.route("/group-meals/<int:gid>/slots/<int:slot_id>", methods=["PATCH"])
+def patch_group_meal_member(gid, slot_id):
     data = request.get_json()
     db = get_db()
     srv = data.get("servings")
     srv = float(srv) if srv not in (None, "", "null") else None
-    # recipe_servings: dict of {str(recipe_id): float|None}
     rs = data.get("recipe_servings")
     rs_json = json.dumps(rs) if isinstance(rs, dict) else None
     if rs_json is not None:
-        db.execute("UPDATE group_meal_members SET servings=?, recipe_servings=? WHERE group_id=? AND meal_id=?",
-                   (srv, rs_json, gid, mid))
+        db.execute("UPDATE group_meal_members SET servings=?, recipe_servings=? WHERE row_id=? AND group_id=?",
+                   (srv, rs_json, slot_id, gid))
     else:
-        db.execute("UPDATE group_meal_members SET servings=? WHERE group_id=? AND meal_id=?",
-                   (srv, gid, mid))
+        db.execute("UPDATE group_meal_members SET servings=? WHERE row_id=? AND group_id=?",
+                   (srv, slot_id, gid))
     db.commit()
     return jsonify({"ok": True})
 
 
-@app.route("/group-meals/<int:gid>/meals/<int:mid>", methods=["DELETE"])
-def remove_meal_from_group(gid, mid):
+@app.route("/group-meals/<int:gid>/slots/<int:slot_id>", methods=["DELETE"])
+def remove_meal_from_group(gid, slot_id):
     db = get_db()
-    db.execute("DELETE FROM group_meal_members WHERE group_id=? AND meal_id=?", (gid, mid))
+    db.execute("DELETE FROM group_meal_members WHERE row_id=? AND group_id=?", (slot_id, gid))
     db.commit()
     return jsonify({"ok": True})
 
