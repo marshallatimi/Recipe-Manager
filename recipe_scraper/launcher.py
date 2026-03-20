@@ -149,24 +149,10 @@ class FileApi:
                 f.write(html_content)
                 tmp = f.name
 
-            # Find Edge (always present on Windows 10+)
-            edge_candidates = [
-                r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-                r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
-                "msedge",
-            ]
-            edge_exe = next((c for c in edge_candidates if os.path.exists(c)), "msedge")
-
             file_url = "file:///" + tmp.replace("\\", "/")
-            subprocess.run(
-                [edge_exe, "--headless=new", "--disable-gpu", "--no-sandbox",
-                 "--print-to-pdf-no-header-footer",
-                 f"--print-to-pdf={pdf_path}", file_url],
-                timeout=30, check=True,
-                creationflags=0x08000000  # CREATE_NO_WINDOW on Windows
-            )
-            if not os.path.exists(pdf_path):
-                return {"ok": False, "msg": "PDF was not created. Make sure Microsoft Edge is installed and up to date."}
+            err = _edge_html_to_pdf(_find_edge(), file_url, pdf_path)
+            if err:
+                return {"ok": False, "msg": err}
             return {"ok": True, "path": pdf_path}
         except Exception as e:
             return {"ok": False, "msg": str(e)}
@@ -213,13 +199,9 @@ class FileApi:
                     f.write(entry["html"])
                     tmp = f.name
                 file_url = "file:///" + tmp.replace("\\", "/")
-                subprocess.run(
-                    [edge_exe, "--headless=new", "--disable-gpu", "--no-sandbox",
-                     "--print-to-pdf-no-header-footer",
-                     f"--print-to-pdf={pdf_path}", file_url],
-                    timeout=30, check=True,
-                    creationflags=0x08000000
-                )
+                err = _edge_html_to_pdf(edge_exe, file_url, pdf_path)
+                if err:
+                    return {"ok": False, "msg": f"Failed on '{safe_name}': {err}"}
                 if os.path.exists(pdf_path):
                     saved.append(safe_name)
             except Exception as e:
@@ -248,24 +230,10 @@ class FileApi:
             # Temp PDF path (keep it; the OS viewer will open it)
             tmp_pdf = tmp_html.replace('.html', '_print.pdf')
 
-            edge_candidates = [
-                r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-                r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
-                "msedge",
-            ]
-            edge_exe = next((c for c in edge_candidates if os.path.exists(c)), "msedge")
             file_url = "file:///" + tmp_html.replace("\\", "/")
-
-            subprocess.run(
-                [edge_exe, "--headless=new", "--disable-gpu", "--no-sandbox",
-                 "--print-to-pdf-no-header-footer",
-                 f"--print-to-pdf={tmp_pdf}", file_url],
-                timeout=30, check=True,
-                creationflags=0x08000000
-            )
-
-            if not os.path.exists(tmp_pdf):
-                return {"ok": False, "msg": "Print preview PDF was not created. Make sure Microsoft Edge is installed."}
+            err = _edge_html_to_pdf(_find_edge(), file_url, tmp_pdf)
+            if err:
+                return {"ok": False, "msg": err}
 
             # Open PDF in the default viewer (Edge, Acrobat, etc.)
             os.startfile(tmp_pdf)
@@ -338,6 +306,41 @@ def _generate_app_icon() -> str | None:
         return tmp
     except Exception:
         return None
+
+
+def _edge_html_to_pdf(edge_exe: str, file_url: str, pdf_path: str,
+                      timeout: int = 30) -> str | None:
+    """Render file_url → pdf_path using Edge headless.
+
+    Tries the modern ``--headless=new`` flag first; falls back to the legacy
+    ``--headless`` flag for older Edge builds.  Uses check=False because some
+    Edge versions exit with a non-zero code even when the PDF is created.
+
+    Returns None on success, or an error string on failure.
+    """
+    base = [
+        "--disable-gpu", "--no-sandbox",
+        "--print-to-pdf-no-header-footer",
+        f"--print-to-pdf={pdf_path}",
+    ]
+    for headless_flag in ("--headless=new", "--headless"):
+        try:
+            subprocess.run(
+                [edge_exe, headless_flag] + base + [file_url],
+                timeout=timeout, check=False,
+                capture_output=True,
+                creationflags=0x08000000,  # CREATE_NO_WINDOW
+            )
+            if os.path.exists(pdf_path):
+                return None  # success
+        except subprocess.TimeoutExpired:
+            return "Edge timed out while generating the PDF (>30 s)."
+        except FileNotFoundError:
+            return "Microsoft Edge was not found. Please ensure Edge is installed."
+        except Exception as e:
+            return str(e)
+    return ("PDF was not created by Edge. "
+            "Make sure Microsoft Edge is installed and up to date.")
 
 
 def _set_taskbar_icon(hwnd: int, ico_path: str) -> None:
