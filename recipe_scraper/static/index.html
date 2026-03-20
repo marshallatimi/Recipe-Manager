@@ -457,15 +457,18 @@
 <div id="custom-titlebar">
   <div class="tb-logo">
     <svg width="22" height="22" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <!-- Pan body -->
-      <circle cx="13" cy="18" r="10" fill="rgba(255,255,255,0.92)"/>
-      <!-- Pan rim/shine -->
-      <circle cx="13" cy="18" r="10" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="1.5"/>
-      <ellipse cx="10" cy="14" rx="3" ry="1.8" fill="rgba(255,255,255,0.35)"/>
-      <!-- Handle -->
-      <rect x="22" y="16" width="10" height="4" rx="2" fill="rgba(255,255,255,0.92)"/>
-      <!-- Handle grip -->
-      <rect x="24" y="17.5" width="6" height="1" rx="0.5" fill="rgba(0,0,0,0.15)"/>
+      <!-- Apple: left lobe -->
+      <circle cx="11" cy="15" r="6.5" fill="rgba(255,255,255,0.92)"/>
+      <!-- Apple: right lobe -->
+      <circle cx="21" cy="15" r="6.5" fill="rgba(255,255,255,0.92)"/>
+      <!-- Apple: bottom fill -->
+      <ellipse cx="16" cy="21" rx="8" ry="6" fill="rgba(255,255,255,0.92)"/>
+      <!-- Apple: cleft (background colour cuts into top centre) -->
+      <ellipse cx="16" cy="12" rx="2.5" ry="3" fill="var(--header-bg)"/>
+      <!-- Stem -->
+      <rect x="14.5" y="5" width="3" height="6" rx="1.5" fill="rgba(200,145,60,0.9)"/>
+      <!-- Leaf -->
+      <ellipse cx="20.5" cy="7" rx="5" ry="2" fill="rgba(80,185,60,0.88)"/>
     </svg>
   </div>
   <span class="tb-title">Macleay Recipe Manager</span>
@@ -850,12 +853,13 @@
   </div>
 </div>
 
-<!-- Update Available Banner (fixed at top of content area) -->
+<!-- Update Available Banner (bottom-centre toast) -->
 <div id="update-banner" hidden style="
-  position:fixed; top:36px; left:0; right:0; z-index:190;
-  background:#2563eb; color:#fff; display:flex; align-items:center;
-  justify-content:center; gap:0.8rem; padding:0.5rem 1rem;
-  font-size:0.85rem; font-weight:600; box-shadow:0 2px 8px rgba(0,0,0,0.2);
+  position:fixed; bottom:1.5rem; left:50%; transform:translateX(-50%);
+  z-index:1000; background:#2563eb; color:#fff; display:flex;
+  align-items:center; gap:0.8rem; padding:0.6rem 1.2rem;
+  border-radius:10px; font-size:0.85rem; font-weight:600;
+  box-shadow:0 4px 20px rgba(0,0,0,0.35); white-space:nowrap;
 ">
   <span id="update-banner-msg">Update available</span>
   <button onclick="startInstallUpdate()" style="

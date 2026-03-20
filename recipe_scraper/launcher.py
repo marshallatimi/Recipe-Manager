@@ -310,31 +310,44 @@ class FileApi:
         webview.windows[0].destroy()
 
 
-def _generate_pan_icon() -> str | None:
-    """Generate a frying-pan ICO file in the temp dir. Returns path or None."""
+def _generate_app_icon() -> str | None:
+    """Generate an apple ICO file in the temp dir. Returns path or None."""
     try:
         from PIL import Image, ImageDraw
-        import tempfile, math
+        import tempfile
 
         sizes = [16, 24, 32, 48, 64, 256]
         frames = []
         for sz in sizes:
             img = Image.new("RGBA", (sz, sz), (0, 0, 0, 0))
             d = ImageDraw.Draw(img)
-            s = sz / 32  # scale factor relative to 32px design
+            s = sz / 64  # scale relative to 64-px design grid
 
-            # Pan body (filled circle, dark red)
-            px, py, pr = 10*s, 13*s, 9.5*s
-            d.ellipse([px-pr, py-pr, px+pr, py+pr], fill=(192, 57, 43, 255))
-            # Pan inner (slightly lighter to give depth)
-            ir = pr * 0.78
-            d.ellipse([px-ir, py-ir, px+ir, py+ir], fill=(210, 74, 60, 255))
-            # Handle
-            hx1, hy1 = 19.5*s, 12.2*s
-            hx2, hy2 = 30*s, 15.8*s
-            d.rounded_rectangle([hx1, hy1, hx2, hy2], radius=2*s, fill=(160, 40, 28, 255))
-            # Shine/reflection
-            d.ellipse([px-pr*0.45, py-pr*0.55, px, py-pr*0.1], fill=(255, 200, 190, 70))
+            # Rounded-square background (app red)
+            bg_rad = max(2, int(sz * 0.20))
+            d.rounded_rectangle([0, 0, sz - 1, sz - 1], radius=bg_rad, fill=(192, 57, 43, 255))
+
+            white = (255, 255, 255, 255)
+            red   = (192, 57, 43, 255)
+
+            # Apple body: two lobes + bottom fill
+            lx, ly, lr = 22*s, 30*s, 13*s
+            d.ellipse([lx-lr, ly-lr, lx+lr, ly+lr], fill=white)
+            rx2, ry2, rr = 42*s, 30*s, 13*s
+            d.ellipse([rx2-rr, ry2-rr, rx2+rr, ry2+rr], fill=white)
+            d.ellipse([16*s, 28*s, 48*s, 56*s], fill=white)
+
+            # Cleft: background colour cuts into top centre
+            d.ellipse([27*s, 17*s, 37*s, 29*s], fill=red)
+
+            # Stem
+            d.rounded_rectangle([29*s, 10*s, 35*s, 22*s],
+                                 radius=max(1, int(2*s)),
+                                 fill=(130, 80, 25, 255))
+
+            # Leaf
+            d.ellipse([31*s, 10*s, 52*s, 18*s], fill=(80, 175, 55, 255))
+
             frames.append(img)
 
         tmp = tempfile.mktemp(suffix=".ico")
@@ -367,8 +380,8 @@ def _set_taskbar_icon(hwnd: int, ico_path: str) -> None:
 def main() -> None:
     port = find_free_port()
 
-    # Generate the frying-pan taskbar icon ahead of window creation
-    icon_path = _generate_pan_icon()
+    # Generate the apple taskbar icon ahead of window creation
+    icon_path = _generate_app_icon()
 
     # Start Flask in a daemon thread
     t = threading.Thread(target=run_server, args=(port,), daemon=True)
