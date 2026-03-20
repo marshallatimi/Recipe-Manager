@@ -14,6 +14,7 @@ import uuid
 import threading
 import tempfile
 import urllib.request
+import ssl
 
 # App version – overwritten by CI at build time via _version.py
 try:
@@ -1076,12 +1077,23 @@ def api_version():
     return jsonify({"version": APP_VERSION})
 
 
+def _urlopen_with_ssl_fallback(req, timeout=15):
+    """Try urlopen with verified SSL; fall back to unverified if cert chain fails.
+    This handles laptops where the PyInstaller bundle's cert store is incomplete."""
+    try:
+        ctx = ssl.create_default_context()
+        return urllib.request.urlopen(req, timeout=timeout, context=ctx)
+    except ssl.SSLError:
+        ctx = ssl._create_unverified_context()
+        return urllib.request.urlopen(req, timeout=timeout, context=ctx)
+
+
 @app.route("/api/check-update")
 def api_check_update():
     try:
         url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
         req = urllib.request.Request(url, headers={"User-Agent": f"RecipeManager/{APP_VERSION}"})
-        with urllib.request.urlopen(req, timeout=8) as resp:
+        with _urlopen_with_ssl_fallback(req, timeout=15) as resp:
             data = json.loads(resp.read())
 
         latest_tag = data.get("tag_name", "").lstrip("v")

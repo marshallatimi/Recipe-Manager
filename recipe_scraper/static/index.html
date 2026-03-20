@@ -2481,7 +2481,7 @@ async function checkForUpdates(manual = false) {
       setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 4000);
     }
   } catch (err) {
-    if (statusEl) statusEl.textContent = manual ? "Could not check." : "";
+    if (statusEl) statusEl.textContent = manual ? `Could not check: ${err.message}` : "";
     if (manual) console.warn("Update check failed:", err);
   }
 }
