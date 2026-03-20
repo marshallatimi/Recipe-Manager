@@ -281,16 +281,16 @@
     [data-theme="dark"] .cat-suggest-item:hover, [data-theme="dark"] .cat-suggest-item.active { background:#3a1010; }
     .cat-suggest-wrap { position:relative; display:inline-block; }
     /* Help modal */
-    .help-layout { display:flex; gap:0; min-height:340px; }
-    .help-sidebar { width:170px; flex-shrink:0; border-right:1px solid var(--border); padding:0.4rem 0; display:flex; flex-direction:column; gap:0.1rem; }
-    .help-sidebar-btn { background:none; border:none; text-align:left; padding:0.5rem 0.85rem; font-size:0.85rem; font-family:inherit; cursor:pointer; border-radius:6px; color:var(--text); transition:background 0.12s,color 0.12s; white-space:nowrap; }
+    .help-layout { display:flex; gap:0; overflow:hidden; height:100%; }
+    .help-sidebar { width:190px; flex-shrink:0; border-right:1px solid var(--border); padding:0.4rem 0; display:flex; flex-direction:column; gap:0.1rem; overflow-y:auto; }
+    .help-sidebar-btn { background:none; border:none; text-align:left; padding:0.5rem 0.75rem 0.5rem 0.85rem; font-size:0.85rem; font-family:inherit; cursor:pointer; border-radius:6px; color:var(--text); transition:background 0.12s,color 0.12s; word-break:break-word; }
     .help-sidebar-btn:hover { background:var(--bg); }
     .help-sidebar-btn.active { background:#f0e9e9; color:var(--red); font-weight:700; }
     [data-theme="dark"] .help-sidebar-btn.active { background: rgba(255,144,128,0.15); color: #ff9080; }
     [data-theme="dark"] .help-sidebar-btn:hover { background: rgba(255,255,255,0.07); }
     [data-theme="dark"] .help-content h4 { color: #ff9080; }
     [data-theme="dark"] .help-tip { border-left-color: #ff9080; }
-    .help-content { flex:1; padding:0 0 0 1.2rem; overflow-y:auto; max-height:420px; }
+    .help-content { flex:1; padding:0 0 0 1.2rem; overflow-y:auto; }
     .help-content h3 { font-size:1.05rem; font-weight:800; margin:0 0 0.6rem; color:var(--text); }
     .help-content h4 { font-size:0.78rem; font-weight:800; text-transform:uppercase; letter-spacing:0.7px; color:var(--red); margin:1rem 0 0.35rem; }
     .help-content p { font-size:0.88rem; color:var(--text); line-height:1.65; margin:0 0 0.5rem; }
@@ -448,6 +448,7 @@
     <button class="tab-btn" id="tab-cookbooks-btn" onclick="showTab('cookbooks')">📚 Cookbooks <span id="cookbooks-count"></span></button>
     <!-- Menu controls pushed to the right -->
     <div class="menubar">
+      <button class="menu-trigger" onclick="showChangelogPanel()">📋 Changelog</button>
       <div class="menu-wrap" id="file-menu-wrap">
         <button class="menu-trigger" onclick="toggleMenu('file')">File ▾</button>
         <div class="menu-dropdown" id="file-menu" hidden>
@@ -801,26 +802,6 @@
       </div>
     </div>
 
-    <div class="settings-section">
-      <h4>Changelog</h4>
-      <div style="font-size:0.82rem;line-height:1.7;color:var(--text);max-height:260px;overflow-y:auto;padding-right:0.3rem">
-        <div style="margin-bottom:0.5rem"><strong>v1.1.3</strong> — Update process fully hidden, app launches automatically after update</div>
-        <div style="margin-bottom:0.5rem"><strong>v1.1.2</strong> — Fixed PDF export for recipes, meals and shopping list</div>
-        <div style="margin-bottom:0.5rem"><strong>v1.1.1</strong> — Fixed SSL errors on some computers; force-kill before installer runs</div>
-        <div style="margin-bottom:0.5rem"><strong>v1.1.0</strong> — Native Windows title bar; tab bar no longer scrolls away; Group Meals layout fixed</div>
-        <div style="margin-bottom:0.5rem"><strong>v1.0.9</strong> — Fixed dragging in fullscreen; SSL download fallback</div>
-        <div style="margin-bottom:0.5rem"><strong>v1.0.8</strong> — Update check works on more computers; shows real error if it fails</div>
-        <div style="margin-bottom:0.5rem"><strong>v1.0.7</strong> — Tab bar stays visible when scrolling; Group Meals matches Meals layout</div>
-        <div style="margin-bottom:0.5rem"><strong>v1.0.6</strong> — Window drag disabled when maximised</div>
-        <div style="margin-bottom:0.5rem"><strong>v1.0.5</strong> — Fixed auto-update leaving _MEI temp directory error</div>
-        <div style="margin-bottom:0.5rem"><strong>v1.0.4</strong> — Side-view frying pan icon matching reference image</div>
-        <div style="margin-bottom:0.5rem"><strong>v1.0.3</strong> — Update notification banner now appears correctly</div>
-        <div style="margin-bottom:0.5rem"><strong>v1.0.2</strong> — 11 fixes: maximize button, popup boxes, import reset, category search, remove photo, notes &amp; link fields, shopping list name, duplicate group meals</div>
-        <div style="margin-bottom:0.5rem"><strong>v1.0.1</strong> — Auto-updater, crash fix, custom icon</div>
-        <div><strong>v1.0.0</strong> — Initial release</div>
-      </div>
-    </div>
-
     <div class="img-modal-btns" style="margin-top:1rem">
       <button class="btn btn-ghost" onclick="closeSettingsPanel()">Close</button>
     </div>
@@ -873,6 +854,20 @@
       <div class="help-sidebar" id="help-sidebar"></div>
       <div class="help-content" id="help-content"></div>
     </div>
+  </div>
+</div>
+
+<!-- Changelog Modal -->
+<div id="changelog-modal-backdrop" class="img-modal-backdrop" hidden onclick="closeChangelogPanel(event)">
+  <div class="img-modal" style="width:min(560px,96vw);max-height:88vh;display:flex;flex-direction:column" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.9rem;flex-shrink:0">
+      <div style="display:flex;align-items:center;gap:0.6rem">
+        <span style="font-size:1.4rem">📋</span>
+        <h3 style="margin:0">Changelog</h3>
+      </div>
+      <button class="btn btn-ghost" style="padding:0.3rem 0.8rem;font-size:0.85rem" onclick="closeChangelogPanel()">Close</button>
+    </div>
+    <div style="overflow-y:auto;flex:1;padding-right:0.3rem" id="changelog-content"></div>
   </div>
 </div>
 
@@ -2876,6 +2871,38 @@ function _renderHelp(topicId) {
 function closeHelpPanel(e) {
   if (!e || e.target === document.getElementById("help-modal-backdrop"))
     document.getElementById("help-modal-backdrop").hidden = true;
+}
+
+// ══════════════════════════════════════════════════════════════
+// Changelog
+// ══════════════════════════════════════════════════════════════
+const CHANGELOG = [
+  {
+    version: "v1.1.5",
+    notes: [
+      "Changelog tab added to the menu bar",
+      "Help panel scrollbar now reaches the full content height",
+      "Help sidebar category names no longer spill over the divider",
+      "App opens maximised and in front after an update install",
+    ]
+  },
+];
+
+function showChangelogPanel() {
+  const el = document.getElementById("changelog-content");
+  el.innerHTML = CHANGELOG.map(entry => `
+    <div style="margin-bottom:1.2rem">
+      <div style="font-weight:800;font-size:1rem;color:var(--red);margin-bottom:0.35rem">${entry.version}</div>
+      <ul style="margin:0;padding-left:1.2rem">
+        ${entry.notes.map(n => `<li style="font-size:0.88rem;color:var(--text);line-height:1.65;margin-bottom:0.2rem">${n}</li>`).join("")}
+      </ul>
+    </div>
+  `).join("");
+  document.getElementById("changelog-modal-backdrop").hidden = false;
+}
+function closeChangelogPanel(e) {
+  if (!e || e.target === document.getElementById("changelog-modal-backdrop"))
+    document.getElementById("changelog-modal-backdrop").hidden = true;
 }
 
 // ══════════════════════════════════════════════════════════════

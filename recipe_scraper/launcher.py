@@ -386,9 +386,17 @@ def main() -> None:
     )
 
     def on_shown():
-        """Maximize the window and apply the pan icon once the native handle is available."""
+        """Maximize the window, bring it to the front, and apply the pan icon."""
         try:
             webview.windows[0].maximize()
+        except Exception:
+            pass
+        # Bring the window to the foreground (important after installer launch)
+        try:
+            import ctypes
+            hwnd = webview.windows[0].native.Handle.ToInt32()
+            ctypes.windll.user32.SetForegroundWindow(hwnd)
+            ctypes.windll.user32.BringWindowToTop(hwnd)
         except Exception:
             pass
         if icon_path:
