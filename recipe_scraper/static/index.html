@@ -840,6 +840,7 @@
       <div class="settings-row" style="margin-top:0.5rem">
         <button class="btn btn-ghost" style="font-size:0.82rem" onclick="checkForUpdates(true)">🔄 Check for Updates</button>
         <span id="settings-update-status" style="font-size:0.8rem;color:var(--muted);margin-left:0.5rem"></span>
+        <button id="settings-install-btn" class="btn btn-primary" style="font-size:0.82rem;margin-left:0.5rem;display:none" onclick="startInstallUpdate()">⬇️ Download &amp; Install</button>
       </div>
     </div>
 
@@ -2465,15 +2466,18 @@ async function checkForUpdates(manual = false) {
 
     _updateInstallerUrl = d.installer_url || d.portable_url || null;
 
+    const installBtn = document.getElementById("settings-install-btn");
     if (d.update_available) {
       // Show persistent banner
       const banner = document.getElementById("update-banner");
       const msg    = document.getElementById("update-banner-msg");
       if (msg)    msg.textContent = `Update available: v${d.latest} (you have v${d.current})`;
       if (banner) banner.hidden = false;
-      if (statusEl) statusEl.textContent = `v${d.latest} available`;
+      if (statusEl) statusEl.textContent = `v${d.latest} available —`;
+      if (installBtn) installBtn.style.display = "";
     } else {
       if (statusEl) statusEl.textContent = manual ? "You're up to date!" : "";
+      if (installBtn) installBtn.style.display = "none";
       setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 4000);
     }
   } catch (err) {
