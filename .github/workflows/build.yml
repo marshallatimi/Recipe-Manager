@@ -55,7 +55,15 @@ jobs:
           echo "VERSION=$ver" >> $env:GITHUB_OUTPUT
           echo "Resolved version: $ver"
 
-      # ── 6. Generate Windows file-properties version resource ─────────────────
+      # ── 6. Bake version string into _version.py (read by app at runtime) ──────
+      - name: Write _version.py
+        shell: pwsh
+        run: |
+          $ver = '${{ steps.ver.outputs.VERSION }}'
+          "__version__ = '$ver'" | Set-Content _version.py -Encoding utf8
+          echo "Wrote _version.py: $ver"
+
+      # ── 7. Generate Windows file-properties version resource ─────────────────
       - name: Generate version info
         run: python create_version_info.py ${{ steps.ver.outputs.VERSION }}
 

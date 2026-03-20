@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory, g
+from flask import Flask, request, jsonify, send_from_directory, g, Response
 from recipe_scrapers import scrape_me
 import sqlite3
 import json
@@ -11,6 +11,17 @@ import io
 import base64
 import mimetypes
 import uuid
+import threading
+import tempfile
+import urllib.request
+
+# App version – overwritten by CI at build time via _version.py
+try:
+    from _version import __version__ as APP_VERSION
+except ImportError:
+    APP_VERSION = "dev"
+
+GITHUB_REPO = "marshallatimi/Macleay-Recipe-Manager"
 
 # ── Path setup (works both in development and as a PyInstaller .exe) ──────────
 # BASE_DIR  = where the bundled files live (read-only when frozen)
@@ -976,6 +987,118 @@ def post_settings_route():
     s.update(data)
     save_settings_to_file(s)
     return jsonify({"ok": True})
+
+
+# ── Auto-Update ───────────────────────────────────────────────────────────────
+
+def _version_gt(a: str, b: str) -> bool:
+    """Return True if version string a is newer than b."""
+    try:
+        av = [int(x) for x in a.strip().lstrip("v").split(".")]
+        bv = [int(x) for x in b.strip().lstrip("v").split(".")]
+        return av > bv
+    except Exception:
+        return False
+
+
+@app.route("/api/version")
+def api_version():
+    return jsonify({"version": APP_VERSION})
+
+
+@app.route("/api/check-update")
+def api_check_update():
+    try:
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+        req = urllib.request.Request(url, headers={"User-Agent": f"RecipeManager/{APP_VERSION}"})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read())
+
+        latest_tag = data.get("tag_name", "").lstrip("v")
+        current    = APP_VERSION.lstrip("v")
+        available  = _version_gt(latest_tag, current)
+
+        # Find the installer asset URL
+        installer_url = None
+        portable_url  = None
+        for asset in data.get("assets", []):
+            name = asset.get("name", "")
+            if "Setup" in name and name.endswith(".exe"):
+                installer_url = asset["browser_download_url"]
+            elif name == "RecipeManager.exe":
+                portable_url  = asset["browser_download_url"]
+
+        return jsonify({
+            "current":          current,
+            "latest":           latest_tag,
+            "update_available": available,
+            "installer_url":    installer_url,
+            "portable_url":     portable_url,
+            "release_url":      data.get("html_url"),
+            "release_notes":    data.get("body", ""),
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/download-update")
+def api_download_update():
+    """
+    Stream download progress as SSE (text/event-stream).
+    Query param: url = download URL for the installer exe.
+    Events: {"pct": 0-100, "bytes": N}  then {"done": true, "path": "/tmp/..."}
+    or     {"error": "message"} on failure.
+    """
+    download_url = request.args.get("url", "")
+    if not download_url:
+        return jsonify({"error": "No URL provided"}), 400
+
+    def generate():
+        try:
+            req = urllib.request.Request(
+                download_url,
+                headers={"User-Agent": f"RecipeManager/{APP_VERSION}"},
+            )
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                total     = int(resp.headers.get("Content-Length") or 0)
+                tmp_path  = os.path.join(tempfile.gettempdir(), "MacleayRecipeManager-Update.exe")
+                downloaded = 0
+                with open(tmp_path, "wb") as f:
+                    while True:
+                        chunk = resp.read(131072)  # 128 KB chunks
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        pct = int(downloaded * 100 / total) if total else 0
+                        yield f"data: {json.dumps({'pct': pct, 'bytes': downloaded, 'total': total})}\n\n"
+
+            yield f"data: {json.dumps({'done': True, 'path': tmp_path})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return Response(
+        generate(),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.route("/api/run-installer", methods=["POST"])
+def api_run_installer():
+    """Launch the downloaded installer then exit the app."""
+    path = (request.get_json() or {}).get("path", "")
+    if not path or not os.path.exists(path):
+        return jsonify({"error": "Installer file not found"}), 400
+    try:
+        # /SILENT = show progress window, /CLOSEAPPLICATIONS = auto-close running app
+        subprocess.Popen([path, "/SILENT", "/CLOSEAPPLICATIONS", "/RESTARTAPPLICATIONS"],
+                         creationflags=0x00000008)  # DETACHED_PROCESS
+        # Give the response time to reach the browser, then exit
+        threading.Timer(1.5, lambda: os._exit(0)).start()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # ── Cookbooks ──────────────────────────────────────────────────────────────

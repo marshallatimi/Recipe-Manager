@@ -17,6 +17,7 @@ build/
 # Generated at build time – do not commit binaries
 icon.ico
 file_version_info.txt
+# _version.py is overwritten by CI; keep the dev placeholder in source control
 
 # Inno Setup output
 Output/

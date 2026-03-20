@@ -826,9 +826,52 @@
       </div>
     </div>
 
+    <div class="settings-section">
+      <h4>About &amp; Updates</h4>
+      <div class="settings-row">
+        <label>Version</label>
+        <span id="settings-version-str" style="font-weight:700;color:var(--text)">—</span>
+      </div>
+      <div class="settings-row" style="margin-top:0.5rem">
+        <button class="btn btn-ghost" style="font-size:0.82rem" onclick="checkForUpdates(true)">🔄 Check for Updates</button>
+        <span id="settings-update-status" style="font-size:0.8rem;color:var(--muted);margin-left:0.5rem"></span>
+      </div>
+    </div>
+
     <div class="img-modal-btns" style="margin-top:1rem">
       <button class="btn btn-ghost" onclick="closeSettingsPanel()">Close</button>
     </div>
+  </div>
+</div>
+
+<!-- Update Available Banner (fixed at top of content area) -->
+<div id="update-banner" hidden style="
+  position:fixed; top:36px; left:0; right:0; z-index:190;
+  background:#2563eb; color:#fff; display:flex; align-items:center;
+  justify-content:center; gap:0.8rem; padding:0.5rem 1rem;
+  font-size:0.85rem; font-weight:600; box-shadow:0 2px 8px rgba(0,0,0,0.2);
+">
+  <span id="update-banner-msg">Update available</span>
+  <button onclick="startInstallUpdate()" style="
+    background:#fff; color:#1d4ed8; border:none; border-radius:5px;
+    padding:0.25rem 0.75rem; font-weight:700; font-size:0.82rem; cursor:pointer;
+  ">Download &amp; Install</button>
+  <button onclick="document.getElementById('update-banner').hidden=true" style="
+    background:rgba(255,255,255,0.2); color:#fff; border:none; border-radius:5px;
+    padding:0.25rem 0.5rem; font-size:0.85rem; cursor:pointer;
+  ">✕</button>
+</div>
+
+<!-- Update Download Progress Modal -->
+<div id="update-progress-backdrop" class="img-modal-backdrop" hidden>
+  <div class="prompt-modal" style="max-width:400px;text-align:center" onclick="event.stopPropagation()">
+    <div style="font-size:1.4rem;margin-bottom:0.5rem">⬇️</div>
+    <div style="font-weight:700;margin-bottom:0.8rem" id="update-progress-title">Downloading update…</div>
+    <div style="background:var(--border);border-radius:99px;height:10px;overflow:hidden;margin-bottom:0.6rem">
+      <div id="update-progress-bar" style="height:100%;background:#2563eb;width:0%;transition:width 0.2s;border-radius:99px"></div>
+    </div>
+    <div id="update-progress-pct" style="font-size:0.82rem;color:var(--muted)">0%</div>
+    <div id="update-progress-msg" style="font-size:0.78rem;color:var(--muted);margin-top:0.5rem"></div>
   </div>
 </div>
 
@@ -2340,11 +2383,123 @@ document.getElementById("prompt-modal-input").addEventListener("keydown", e => {
 function showSettingsPanel() {
   closeAllMenus();
   document.getElementById("settings-modal-backdrop").hidden = false;
+  loadVersionInfo();
 }
 function closeSettingsPanel(e) {
   if (!e || e.target === document.getElementById("settings-modal-backdrop"))
     document.getElementById("settings-modal-backdrop").hidden = true;
 }
+
+// ── Auto-Update ───────────────────────────────────────────────────────────────
+
+let _updateInstallerUrl = null;  // set when an update is found
+
+async function loadVersionInfo() {
+  try {
+    const r = await fetch("/api/version");
+    const d = await r.json();
+    const el = document.getElementById("settings-version-str");
+    if (el) el.textContent = d.version || "dev";
+  } catch (_) {}
+}
+
+async function checkForUpdates(manual = false) {
+  const statusEl = document.getElementById("settings-update-status");
+  if (statusEl) statusEl.textContent = "Checking…";
+  try {
+    const r = await fetch("/api/check-update");
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+
+    _updateInstallerUrl = d.installer_url || d.portable_url || null;
+
+    if (d.update_available) {
+      // Show persistent banner
+      const banner = document.getElementById("update-banner");
+      const msg    = document.getElementById("update-banner-msg");
+      if (msg)    msg.textContent = `Update available: v${d.latest} (you have v${d.current})`;
+      if (banner) banner.hidden = false;
+      if (statusEl) statusEl.textContent = `v${d.latest} available`;
+    } else {
+      if (statusEl) statusEl.textContent = manual ? "You're up to date!" : "";
+      setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 4000);
+    }
+  } catch (err) {
+    if (statusEl) statusEl.textContent = manual ? "Could not check." : "";
+    if (manual) console.warn("Update check failed:", err);
+  }
+}
+
+async function startInstallUpdate() {
+  if (!_updateInstallerUrl) {
+    await showAlert("No installer URL found. Please download manually from GitHub.");
+    return;
+  }
+  // Only works inside the packaged app (pywebview); otherwise open browser
+  if (!window.pywebview) {
+    window.open(_updateInstallerUrl, "_blank");
+    return;
+  }
+
+  const backdrop = document.getElementById("update-progress-backdrop");
+  const bar      = document.getElementById("update-progress-bar");
+  const pctEl    = document.getElementById("update-progress-pct");
+  const msgEl    = document.getElementById("update-progress-msg");
+  const titleEl  = document.getElementById("update-progress-title");
+
+  backdrop.hidden = false;
+  document.getElementById("update-banner").hidden = true;
+
+  if (titleEl) titleEl.textContent = "Downloading update…";
+  if (msgEl)   msgEl.textContent   = "Please wait — this may take a minute.";
+
+  const es = new EventSource(`/api/download-update?url=${encodeURIComponent(_updateInstallerUrl)}`);
+  es.onmessage = async (evt) => {
+    const data = JSON.parse(evt.data);
+
+    if (data.error) {
+      es.close();
+      backdrop.hidden = true;
+      await showAlert("Download failed: " + data.error);
+      return;
+    }
+
+    if (data.done) {
+      es.close();
+      if (bar)   bar.style.width  = "100%";
+      if (pctEl) pctEl.textContent = "100%";
+      if (titleEl) titleEl.textContent = "Installing…";
+      if (msgEl)   msgEl.textContent   = "The app will close and restart automatically.";
+
+      // Tell the backend to run the installer then exit
+      await fetch("/api/run-installer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: data.path }),
+      });
+      return;
+    }
+
+    // Progress update
+    if (bar)   bar.style.width   = (data.pct || 0) + "%";
+    if (pctEl) pctEl.textContent = (data.pct || 0) + "%";
+    if (msgEl && data.total) {
+      const mb = (data.bytes / 1048576).toFixed(1);
+      const tot = (data.total / 1048576).toFixed(1);
+      msgEl.textContent = `${mb} MB / ${tot} MB`;
+    }
+  };
+  es.onerror = async () => {
+    es.close();
+    backdrop.hidden = true;
+    await showAlert("Download connection was lost. Please try again.");
+  };
+}
+
+// Check for updates silently 5 seconds after page load (only in packaged app)
+setTimeout(() => {
+  if (window.pywebview) checkForUpdates(false);
+}, 5000);
 
 // ══════════════════════════════════════════════════════════════
 // Help / About
