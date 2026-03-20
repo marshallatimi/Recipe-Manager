@@ -3,7 +3,9 @@ generate_icon.py - creates icon.ico in the project root.
 Run manually or automatically by CI before PyInstaller:
   python generate_icon.py
 
-Draws a red apple silhouette (white) on the app's red background.
+Draws a side-view frying-pan silhouette (white) on the app's red background,
+matching the reference image: oval pan body with visible inner rim and a long
+handle extending to the upper-right.
 """
 import os, sys
 
@@ -32,31 +34,29 @@ def generate(dest="icon.ico"):
         )
 
         white = (255, 255, 255, 255)
-        red   = (192, 57, 43, 255)   # background colour — used for the cleft
+        red   = (192, 57, 43, 255)   # background colour, used for inner-rim cutout
 
-        # ── Apple body ────────────────────────────────────────────────────────
-        # Two overlapping lobes form the characteristic double-bump top
-        lx, ly, lr = 22*s, 30*s, 13*s          # left lobe centre + radius
-        d.ellipse([lx-lr, ly-lr, lx+lr, ly+lr], fill=white)
+        # ── Pan body ──────────────────────────────────────────────────────────
+        # Wide shallow oval representing the pan body (side/angle view)
+        d.ellipse([2*s, 26*s, 38*s, 54*s], fill=white)
 
-        rx2, ry2, rr = 42*s, 30*s, 13*s         # right lobe centre + radius
-        d.ellipse([rx2-rr, ry2-rr, rx2+rr, ry2+rr], fill=white)
+        # Inner cooking-surface cutout: background colour oval at the top of
+        # the pan body shows the depth/rim of the pan
+        d.ellipse([5*s, 20*s, 35*s, 33*s], fill=red)
 
-        # Fill in the bottom half so the two lobes connect into a solid body
-        d.ellipse([16*s, 28*s, 48*s, 56*s], fill=white)
+        # ── Handle ────────────────────────────────────────────────────────────
+        # Tapered polygon from pan (wide end) to grip (narrow end),
+        # angling up to the upper-right like the reference image
+        handle_pts = [
+            (34*s, 29*s),   # top at pan end
+            (38*s, 35*s),   # bottom at pan end
+            (61*s, 11*s),   # bottom at grip end
+            (57*s,  6*s),   # top at grip end
+        ]
+        d.polygon(handle_pts, fill=white)
 
-        # Cleft: background-colour ellipse cuts into the top centre
-        d.ellipse([27*s, 17*s, 37*s, 29*s], fill=red)
-
-        # ── Stem ──────────────────────────────────────────────────────────────
-        d.rounded_rectangle(
-            [29*s, 10*s, 35*s, 22*s],
-            radius=max(1, int(2*s)),
-            fill=(130, 80, 25, 255),
-        )
-
-        # ── Leaf ──────────────────────────────────────────────────────────────
-        d.ellipse([31*s, 10*s, 52*s, 18*s], fill=(80, 175, 55, 255))
+        # Rounded cap at grip end
+        d.ellipse([55*s, 5*s, 63*s, 12*s], fill=white)
 
         frames.append(img)
 

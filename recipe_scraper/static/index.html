@@ -457,18 +457,14 @@
 <div id="custom-titlebar">
   <div class="tb-logo">
     <svg width="22" height="22" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <!-- Apple: left lobe -->
-      <circle cx="11" cy="15" r="6.5" fill="rgba(255,255,255,0.92)"/>
-      <!-- Apple: right lobe -->
-      <circle cx="21" cy="15" r="6.5" fill="rgba(255,255,255,0.92)"/>
-      <!-- Apple: bottom fill -->
-      <ellipse cx="16" cy="21" rx="8" ry="6" fill="rgba(255,255,255,0.92)"/>
-      <!-- Apple: cleft (background colour cuts into top centre) -->
-      <ellipse cx="16" cy="12" rx="2.5" ry="3" fill="var(--header-bg)"/>
-      <!-- Stem -->
-      <rect x="14.5" y="5" width="3" height="6" rx="1.5" fill="rgba(200,145,60,0.9)"/>
-      <!-- Leaf -->
-      <ellipse cx="20.5" cy="7" rx="5" ry="2" fill="rgba(80,185,60,0.88)"/>
+      <!-- Pan body: wide shallow oval -->
+      <ellipse cx="10" cy="20" rx="9" ry="7" fill="rgba(255,255,255,0.92)"/>
+      <!-- Inner cooking surface: background-colour cutout shows the rim depth -->
+      <ellipse cx="10" cy="13" rx="7.5" ry="3.2" fill="var(--header-bg)"/>
+      <!-- Handle: tapered polygon angling to upper-right -->
+      <polygon points="17,14.5 19.5,17.5 30.5,5.5 28.5,3" fill="rgba(255,255,255,0.92)"/>
+      <!-- Rounded grip cap -->
+      <ellipse cx="29" cy="4.2" rx="2" ry="1.8" fill="rgba(255,255,255,0.92)"/>
     </svg>
   </div>
   <span class="tb-title">Macleay Recipe Manager</span>
