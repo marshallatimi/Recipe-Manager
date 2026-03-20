@@ -1186,25 +1186,26 @@ def api_run_installer():
     if not path or not os.path.exists(path):
         return jsonify({"error": "Installer file not found"}), 400
     try:
-        # Write a batch script that:
+        # Write a hidden PowerShell script that:
         #  1. Waits 2 s for Python/Flask to exit and MEI cleanup to finish
-        #  2. Force-kills any leftover RecipeManager.exe processes (WebView2
-        #     child processes can outlive the Python process)
-        #  3. Waits 1 more second to be safe
-        #  4. Runs the installer silently
-        bat_path = os.path.join(tempfile.gettempdir(), "_recipe_update.bat")
-        with open(bat_path, "w") as f:
-            f.write("@echo off\r\n")
-            f.write("timeout /t 2 /nobreak >nul\r\n")
-            f.write("taskkill /f /im RecipeManager.exe >nul 2>&1\r\n")
-            f.write("timeout /t 1 /nobreak >nul\r\n")
-            f.write(f'start "" "{path}" /SILENT /RESTARTAPPLICATIONS\r\n')
-            f.write('del "%~f0"\r\n')
+        #  2. Force-kills any leftover RecipeManager.exe (WebView2 children)
+        #  3. Waits 1 more second then runs the installer silently
+        # PowerShell with -WindowStyle Hidden is completely invisible — unlike
+        # cmd/timeout which shows a countdown window even with CREATE_NO_WINDOW.
+        safe_path = path.replace("'", "''")   # escape single quotes for PS
+        ps_path = os.path.join(tempfile.gettempdir(), "_recipe_update.ps1")
+        safe_ps = ps_path.replace("'", "''")
+        with open(ps_path, "w", encoding="utf-8") as f:
+            f.write("Start-Sleep -Seconds 2\r\n")
+            f.write("Stop-Process -Name 'RecipeManager' -Force -ErrorAction SilentlyContinue\r\n")
+            f.write("Start-Sleep -Seconds 1\r\n")
+            f.write(f"Start-Process -FilePath '{safe_path}' -ArgumentList '/SILENT','/RESTARTAPPLICATIONS'\r\n")
+            f.write(f"Remove-Item -Path '{safe_ps}' -Force -ErrorAction SilentlyContinue\r\n")
 
-        # Launch the batch script fully detached so it outlives this process
         subprocess.Popen(
-            ["cmd", "/c", bat_path],
-            creationflags=0x00000008 | 0x08000000,  # DETACHED_PROCESS | CREATE_NO_WINDOW
+            ["powershell", "-WindowStyle", "Hidden", "-NonInteractive",
+             "-ExecutionPolicy", "Bypass", "-File", ps_path],
+            creationflags=0x08000000,  # CREATE_NO_WINDOW
             close_fds=True,
         )
         # Exit after the response reaches the browser

@@ -73,7 +73,7 @@ Name: "{commondesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; IconFilenam
 
 [Run]
 ; Offer to launch the app after install
-Filename: "{app}\{#AppExeName}"; Description: "Launch {#AppName} now"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#AppExeName}"; Description: "Launch {#AppName} now"; Flags: nowait postinstall
 
 [UninstallDelete]
 ; Remove any temp files the app may leave in its install dir
