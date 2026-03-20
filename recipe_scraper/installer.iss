@@ -16,9 +16,9 @@ AppId={#AppId}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher={#AppPublisher}
-AppPublisherURL=https://github.com/marshallatimi/Recipe-Manager
-AppSupportURL=https://github.com/marshallatimi/Recipe-Manager/issues
-AppUpdatesURL=https://github.com/marshallatimi/Recipe-Manager/releases
+AppPublisherURL=https://github.com/marshallatimi/Macleay-Recipe-Manager
+AppSupportURL=https://github.com/marshallatimi/Macleay-Recipe-Manager/issues
+AppUpdatesURL=https://github.com/marshallatimi/Macleay-Recipe-Manager/releases
 
 ; Install to Program Files
 DefaultDirName={autopf}\{#AppName}
