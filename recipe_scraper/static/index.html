@@ -221,6 +221,8 @@
     .del-btn:hover { color:var(--red); }
     .del-section-btn { background:none; border:none; color:#ccc; cursor:pointer; font-size:0.75rem; margin-left:0.5rem; padding:0 2px; transition:color 0.15s; }
     .del-section-btn:hover { color:var(--red); }
+    .ing-row[draggable="true"], .step-row[draggable="true"] { cursor: grab; }
+    .group-header-editable[draggable="true"] { cursor: grab; }
 
     .add-item-btn { background:none; border:2px dashed var(--border); border-radius:6px; color:var(--muted); padding:0.3rem 0.8rem; cursor:pointer; font-size:0.82rem; width:100%; text-align:left; transition:border-color 0.2s,color 0.2s; margin-top:0.3rem; }
     .add-item-btn:hover { border-color:var(--red); color:var(--red); }
@@ -459,6 +461,7 @@
           <button onclick="menuAction(fileExit)">✕ Exit</button>
         </div>
       </div>
+      <button class="menu-trigger" onclick="showChangelogPanel()">📋 Changelog</button>
       <button class="menu-trigger" onclick="showHelpPanel()">❓ Help</button>
       <button class="menu-trigger" onclick="showSettingsPanel()">⚙ Settings</button>
     </div>
@@ -481,11 +484,10 @@
       <div class="grid-controls-left">
         <input class="grid-search-input" id="recipe-search-input" type="search"
           placeholder="🔍 Search recipes…" oninput="applySort()" autocomplete="off">
-        <button id="ing-search-toggle" onclick="toggleIngSearch()"
-          title="Toggle ingredient search"
-          style="padding:0.3rem 0.7rem;border:1px solid var(--border);border-radius:5px;background:var(--card);color:var(--text);font-size:0.82rem;cursor:pointer;white-space:nowrap">
-          🔍 By Title
-        </button>
+        <select id="ing-search-select" onchange="setIngSearchMode(this.value)" style="padding:0.3rem 0.55rem;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:0.82rem">
+          <option value="title">🔍 By Title</option>
+          <option value="ingredient">🧄 By Ingredient</option>
+        </select>
         <label>Sort:</label>
         <select id="sort-select" onchange="applySort()">
           <option value="newest">Newest</option>
@@ -528,7 +530,10 @@
   <div id="shopping-actions" class="recipe-toolbar" style="margin-bottom:1rem">
     <div class="recipe-toolbar-left"></div>
     <div class="recipe-toolbar-right">
-      <button class="btn btn-ghost" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="toggleShopCategories()">📦 By Category</button>
+      <select id="shop-view-select" onchange="setShopView(this.value)" style="padding:0.3rem 0.55rem;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:0.82rem">
+        <option value="recipe">📋 By Recipe</option>
+        <option value="category">📦 By Category</option>
+      </select>
       <button class="btn btn-ghost" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="showShopSettings()">⚙️ Categories</button>
       <button class="btn btn-ghost btn-print-disabled" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="printShoppingList()">🖨 Print List</button>
       <button class="btn btn-dark btn-print-disabled"  style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="exportShoppingPdf()">💾 Save PDF</button>
@@ -882,7 +887,7 @@
 
 <!-- Shopping Settings Modal -->
 <div id="shop-settings-backdrop" class="img-modal-backdrop" hidden onclick="closeShopSettings(event)">
-  <div class="img-modal" style="width:min(680px,96vw);height:80vh;display:flex;flex-direction:column" onclick="event.stopPropagation()">
+  <div class="img-modal" style="width:min(680px,96vw);height:min(85vh,700px);max-width:680px;display:flex;flex-direction:column" onclick="event.stopPropagation()">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.8rem;flex-shrink:0">
       <div style="display:flex;align-items:center;gap:0.6rem">
         <span style="font-size:1.3rem">🛒</span>
@@ -891,27 +896,36 @@
       <button class="btn btn-ghost" style="padding:0.3rem 0.8rem;font-size:0.85rem" onclick="closeShopSettings()">Close</button>
     </div>
     <div style="font-size:0.82rem;color:var(--muted);margin-bottom:0.7rem;flex-shrink:0">
-      Assign each ingredient to a category. Use <strong>Auto-Assign</strong> to categorize automatically by ingredient name.
+      Assign each ingredient to a category. Auto-detect applies automatically for unassigned ingredients.
     </div>
-    <div style="display:flex;gap:0.5rem;margin-bottom:0.7rem;flex-shrink:0">
+    <div style="display:flex;gap:0.5rem;margin-bottom:0.7rem;flex-shrink:0;flex-wrap:wrap">
       <input type="text" id="shop-settings-search" placeholder="Filter ingredients…" oninput="renderShopSettingsList()"
-        style="flex:1;padding:0.3rem 0.55rem;border:1px solid var(--border);border-radius:5px;background:var(--card);color:var(--text);font-size:0.82rem"/>
+        style="flex:1;min-width:120px;padding:0.3rem 0.55rem;border:1px solid var(--border);border-radius:5px;background:var(--card);color:var(--text);font-size:0.82rem"/>
       <select id="shop-settings-cat-filter" onchange="renderShopSettingsList()"
-        style="padding:0.3rem;border:1px solid var(--border);border-radius:5px;background:var(--card);color:var(--text);font-size:0.82rem">
+        style="padding:0.3rem 0.4rem;border:1px solid var(--border);border-radius:5px;background:var(--card);color:var(--text);font-size:0.82rem">
         <option value="">All categories</option>
-        <option value="Spices">Spices</option>
-        <option value="Refrigerated">Refrigerated</option>
-        <option value="Frozen">Frozen</option>
-        <option value="Pantry">Pantry</option>
-        <option value="Utensils / Plates / Cups / Boats">Utensils / Plates / Cups / Boats</option>
-        <option value="Other">Other</option>
       </select>
+      <button class="btn btn-ghost" style="font-size:0.82rem" onclick="clearAllShopCategories()" title="Reset all assignments; auto-detect will apply">🗑 Clear All</button>
     </div>
     <div id="shop-settings-list" style="flex:1;overflow-y:auto;border:1px solid var(--border);border-radius:6px;min-height:0"></div>
     <div style="display:flex;justify-content:flex-end;gap:0.5rem;margin-top:0.8rem;flex-shrink:0">
       <button class="btn btn-ghost" onclick="closeShopSettings()">Cancel</button>
       <button class="btn btn-dark" onclick="saveShopSettings()">Save</button>
     </div>
+  </div>
+</div>
+
+<!-- Changelog Modal -->
+<div id="changelog-modal-backdrop" class="img-modal-backdrop" hidden onclick="closeChangelogPanel(event)">
+  <div class="img-modal" style="width:min(560px,96vw);max-height:88vh;display:flex;flex-direction:column" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.9rem;flex-shrink:0">
+      <div style="display:flex;align-items:center;gap:0.6rem">
+        <span style="font-size:1.4rem">📋</span>
+        <h3 style="margin:0">Changelog</h3>
+      </div>
+      <button class="btn btn-ghost" style="padding:0.3rem 0.8rem;font-size:0.85rem" onclick="closeChangelogPanel()">Close</button>
+    </div>
+    <div style="overflow-y:auto;flex:1;padding-right:0.3rem" id="changelog-content"></div>
   </div>
 </div>
 
@@ -1156,9 +1170,13 @@ function updateCatFilterBtn() {
 let _ingSearchMode = false;
 function toggleIngSearch() {
   _ingSearchMode = !_ingSearchMode;
-  const btn = document.getElementById("ing-search-toggle");
-  if (btn) btn.innerHTML = _ingSearchMode ? '🥕 By Ingredient' : '🔍 By Title';
-  renderGrid();
+  const sel = document.getElementById("ing-search-select");
+  if (sel) sel.value = _ingSearchMode ? "ingredient" : "title";
+  applySort();
+}
+function setIngSearchMode(val) {
+  _ingSearchMode = (val === "ingredient");
+  applySort();
 }
 
 function getSortedRecipes() {
@@ -1906,11 +1924,16 @@ function buildIngGroupsEditable(groups) {
   return groups.map((g, gIdx) => {
     const headerHtml = multiGroup
       ? `<div style="display:flex;align-items:center">
-           <span class="group-header-editable" onclick="inlineEditIngGroupName(this,${gIdx})">${esc(g.purpose || "Untitled Section")}</span>
+           <span class="group-header-editable" draggable="true" data-gidx="${gIdx}"
+             ondragstart="ingGroupDragStart(event)" ondragover="ingGroupDragOver(event)"
+             ondrop="ingGroupDrop(event)" ondragleave="ingGroupDragLeave(event)"
+             onclick="inlineEditIngGroupName(this,${gIdx})">${esc(g.purpose || "Untitled Section")}</span>
            <button class="del-section-btn" onclick="deleteIngredientGroup(${gIdx})" title="Delete section">✕ section</button>
          </div>` : "";
     const items = g.ingredients.map((ing, iIdx) =>
-      `<div class="ing-row">
+      `<div class="ing-row" draggable="true" data-gidx="${gIdx}" data-iidx="${iIdx}"
+         ondragstart="ingDragStart(event)" ondragover="ingDragOver(event)"
+         ondrop="ingDrop(event)" ondragleave="ingDragLeave(event)">
          <span class="ing-text" data-ctx="saved" data-orig="${esc(ing)}" onclick="inlineEditIng(this,${gIdx},${iIdx})" title="Click to edit">${esc(ing)}</span>
          <button class="del-btn" onclick="deleteIngredient(${gIdx},${iIdx})" title="Remove">✕</button>
        </div>`
@@ -1929,21 +1952,149 @@ function buildStepGroupsEditable(groups) {
   return groups.map((g, gIdx) => {
     const headerHtml = multiGroup
       ? `<div style="display:flex;align-items:center">
-           <span class="group-header-editable" onclick="inlineEditStepGroupName(this,${gIdx})">${esc(g.purpose || "Untitled Section")}</span>
+           <span class="group-header-editable" draggable="true" data-gidx="${gIdx}"
+             ondragstart="stepGroupDragStart(event)" ondragover="stepGroupDragOver(event)"
+             ondrop="stepGroupDrop(event)" ondragleave="stepGroupDragLeave(event)"
+             onclick="inlineEditStepGroupName(this,${gIdx})">${esc(g.purpose || "Untitled Section")}</span>
            <button class="del-section-btn" onclick="deleteInstructionGroup(${gIdx})" title="Delete section">✕ section</button>
          </div>` : "";
-    const items = g.steps.map((s, sIdx) =>
-      `<div class="step-row">
-         <span class="step-num">${stepNum++}</span>
+    const items = g.steps.map((s, sIdx) => {
+      const num = stepNum++;
+      return `<div class="step-row" draggable="true" data-gidx="${gIdx}" data-sidx="${sIdx}"
+         ondragstart="stepDragStart(event)" ondragover="stepDragOver(event)"
+         ondrop="stepDrop(event)" ondragleave="stepDragLeave(event)">
+         <span class="step-num">${num}</span>
          <span class="step-text" onclick="inlineEditStep(this,${gIdx},${sIdx})" title="Click to edit">${esc(s)}</span>
          <button class="del-btn" onclick="deleteStep(${gIdx},${sIdx})" title="Remove">✕</button>
-       </div>`
-    ).join("");
+       </div>`;
+    }).join("");
     return `<div class="step-group" data-gidx="${gIdx}">
       ${headerHtml}${items}
       <button class="add-item-btn" onclick="addStepToGroup(${gIdx})">+ Add step</button>
     </div>`;
   }).join("");
+}
+
+// ── Drag-and-drop for ingredients and steps ───────────────────
+let _dragSrc = null; // {type: 'ing'|'step'|'ing-group'|'step-group', gIdx, iIdx/sIdx}
+
+function ingDragStart(e) {
+  const row = e.currentTarget;
+  _dragSrc = {type:'ing', gIdx: +row.dataset.gidx, iIdx: +row.dataset.iidx};
+  e.dataTransfer.effectAllowed = 'move';
+  row.style.opacity = '0.4';
+}
+function ingDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  e.currentTarget.style.borderTop = '2px solid var(--red)';
+}
+function ingDragLeave(e) {
+  e.currentTarget.style.borderTop = '';
+}
+function ingDrop(e) {
+  e.preventDefault();
+  const target = e.currentTarget;
+  target.style.borderTop = '';
+  if (!_dragSrc || _dragSrc.type !== 'ing') return;
+  const toGIdx = +target.dataset.gidx;
+  const toIIdx = +target.dataset.iidx;
+  if (_dragSrc.gIdx === toGIdx && _dragSrc.iIdx === toIIdx) return;
+  const ig = selectedRecipe.ingredient_groups;
+  const fromArr = ig[_dragSrc.gIdx].ingredients;
+  const [moved] = fromArr.splice(_dragSrc.iIdx, 1);
+  ig[toGIdx].ingredients.splice(toIIdx, 0, moved);
+  _dragSrc = null;
+  document.getElementById("saved-detail-content").innerHTML = buildSavedHTML(selectedRecipe);
+  initScaler();
+  showToast("Ingredient moved!");
+}
+
+function ingGroupDragStart(e) {
+  const el = e.currentTarget;
+  _dragSrc = {type:'ing-group', gIdx: +el.dataset.gidx};
+  e.dataTransfer.effectAllowed = 'move';
+}
+function ingGroupDragOver(e) {
+  e.preventDefault();
+  e.currentTarget.closest('.ing-group').style.borderTop = '2px solid var(--red)';
+}
+function ingGroupDragLeave(e) {
+  e.currentTarget.closest('.ing-group').style.borderTop = '';
+}
+function ingGroupDrop(e) {
+  e.preventDefault();
+  const targetGroup = e.currentTarget.closest('.ing-group');
+  if (targetGroup) targetGroup.style.borderTop = '';
+  if (!_dragSrc || _dragSrc.type !== 'ing-group') return;
+  const toGIdx = +targetGroup?.dataset?.gidx;
+  if (isNaN(toGIdx) || _dragSrc.gIdx === toGIdx) return;
+  const ig = selectedRecipe.ingredient_groups;
+  const [moved] = ig.splice(_dragSrc.gIdx, 1);
+  ig.splice(toGIdx, 0, moved);
+  _dragSrc = null;
+  document.getElementById("saved-detail-content").innerHTML = buildSavedHTML(selectedRecipe);
+  initScaler();
+  showToast("Section moved!");
+}
+
+function stepDragStart(e) {
+  const row = e.currentTarget;
+  _dragSrc = {type:'step', gIdx: +row.dataset.gidx, sIdx: +row.dataset.sidx};
+  e.dataTransfer.effectAllowed = 'move';
+  row.style.opacity = '0.4';
+}
+function stepDragOver(e) {
+  e.preventDefault();
+  e.currentTarget.style.borderTop = '2px solid var(--red)';
+}
+function stepDragLeave(e) {
+  e.currentTarget.style.borderTop = '';
+}
+function stepDrop(e) {
+  e.preventDefault();
+  const target = e.currentTarget;
+  target.style.borderTop = '';
+  if (!_dragSrc || _dragSrc.type !== 'step') return;
+  const toGIdx = +target.dataset.gidx;
+  const toSIdx = +target.dataset.sidx;
+  if (_dragSrc.gIdx === toGIdx && _dragSrc.sIdx === toSIdx) return;
+  const sg = selectedRecipe.instruction_groups;
+  const fromArr = sg[_dragSrc.gIdx].steps;
+  const [moved] = fromArr.splice(_dragSrc.sIdx, 1);
+  sg[toGIdx].steps.splice(toSIdx, 0, moved);
+  _dragSrc = null;
+  document.getElementById("saved-detail-content").innerHTML = buildSavedHTML(selectedRecipe);
+  initScaler();
+  showToast("Step moved!");
+}
+
+function stepGroupDragStart(e) {
+  const el = e.currentTarget;
+  _dragSrc = {type:'step-group', gIdx: +el.dataset.gidx};
+  e.dataTransfer.effectAllowed = 'move';
+}
+function stepGroupDragOver(e) {
+  e.preventDefault();
+  e.currentTarget.closest('.step-group').style.borderTop = '2px solid var(--red)';
+}
+function stepGroupDragLeave(e) {
+  e.currentTarget.closest('.step-group').style.borderTop = '';
+}
+function stepGroupDrop(e) {
+  e.preventDefault();
+  const targetGroup = e.currentTarget.closest('.step-group');
+  if (targetGroup) targetGroup.style.borderTop = '';
+  if (!_dragSrc || _dragSrc.type !== 'step-group') return;
+  const toGIdx = +targetGroup?.dataset?.gidx;
+  if (isNaN(toGIdx) || _dragSrc.gIdx === toGIdx) return;
+  const sg = selectedRecipe.instruction_groups;
+  const [moved] = sg.splice(_dragSrc.gIdx, 1);
+  sg.splice(toGIdx, 0, moved);
+  _dragSrc = null;
+  document.getElementById("saved-detail-content").innerHTML = buildSavedHTML(selectedRecipe);
+  initScaler();
+  showToast("Section moved!");
 }
 
 // ── Scrape card ───────────────────────────────────────────────
@@ -2142,6 +2293,7 @@ function _mealRecipeFactor(m, mr) {
   if (!r) return 1;
   const effectiveServings = mr.recipe_servings != null ? mr.recipe_servings
                           : (m.default_servings != null ? m.default_servings : null);
+  if (effectiveServings !== null && parseFloat(effectiveServings) === 0) return 0; // skip signal
   const origNum = r.servings_num || parseServingsNumJS(r.servings) || null;
   return (effectiveServings && origNum && origNum > 0) ? effectiveServings / origNum : 1;
 }
@@ -2153,7 +2305,7 @@ function printMeal() {
   const pairs = m.recipes.map(mr => {
     const r = savedRecipes.find(r => r.id === mr.id);
     return r ? {r, factor: _mealRecipeFactor(m, mr)} : null;
-  }).filter(Boolean);
+  }).filter(p => p && p.factor !== 0);
   if (!pairs.length) { showAlert("Recipe data not loaded yet."); return; }
 
   const blocks = pairs.map(({r, factor}, i) => {
@@ -3940,6 +4092,12 @@ function _autoDetectCategory(nameKey) {
 let _shopCategoryView = false;
 function toggleShopCategories() {
   _shopCategoryView = !_shopCategoryView;
+  const sel = document.getElementById("shop-view-select");
+  if (sel) sel.value = _shopCategoryView ? "category" : "recipe";
+  renderShoppingList();
+}
+function setShopView(val) {
+  _shopCategoryView = (val === "category");
   renderShoppingList();
 }
 
@@ -3980,19 +4138,22 @@ async function showShopSettings() {
   } catch {
     _shopSettingsIngredients = [];
   }
-  // Auto-assign any unassigned ingredients
-  _shopSettingsIngredients.forEach(key => {
-    if (!(_shopSettings.ingredient_categories[key] != null)) {
-      _shopSettings.ingredient_categories[key] = _autoDetectCategory(key);
-    }
-  });
   renderShopSettingsList();
   document.getElementById("shop-settings-backdrop").hidden = false;
 }
 
 function renderShopSettingsList() {
   const search = (document.getElementById("shop-settings-search")?.value || "").toLowerCase().trim();
-  const catFilter = document.getElementById("shop-settings-cat-filter")?.value || "";
+  const catFilterEl = document.getElementById("shop-settings-cat-filter");
+  const catFilter = catFilterEl?.value || "";
+  // Populate category filter select if not yet done
+  if (catFilterEl && catFilterEl.options.length <= 1) {
+    SHOP_CATEGORY_NAMES.forEach(cat => {
+      const opt = document.createElement("option");
+      opt.value = cat; opt.textContent = cat;
+      catFilterEl.appendChild(opt);
+    });
+  }
   let items = search ? _shopSettingsIngredients.filter(k => k.includes(search)) : [..._shopSettingsIngredients];
   if (catFilter) {
     items = items.filter(k => (_shopSettings.ingredient_categories[k] || _autoDetectCategory(k)) === catFilter);
@@ -4025,6 +4186,12 @@ function autoAssignShopSettings() {
   showToast("Auto-assigned " + _shopSettingsIngredients.length + " ingredients!");
 }
 
+function clearAllShopCategories() {
+  _shopSettings.ingredient_categories = {};
+  renderShopSettingsList();
+  showToast("All categories cleared — auto-detect will apply.");
+}
+
 async function saveShopSettings() {
   try {
     await fetch("/shopping/settings", {
@@ -4046,17 +4213,18 @@ function renderShoppingList() {
   const actions = document.getElementById("shopping-actions");
   if (!content) return;
 
-  if (!shoppingList.length) {
-    content.innerHTML = `<div class="shop-empty"><div class="big-icon">🛒</div><p>No recipes added yet.<br>Select a recipe above to get started.</p></div>`;
-    if (actions) {
-      actions.hidden = false;
-      actions.querySelectorAll('.btn-print-disabled').forEach(b => b.disabled = true);
-    }
-    return;
-  }
   if (actions) {
     actions.hidden = false;
-    actions.querySelectorAll('.btn-print-disabled').forEach(b => b.disabled = false);
+    const printBtn = actions.querySelector('button[onclick="printShoppingList()"]');
+    const pdfBtn = actions.querySelector('button[onclick="exportShoppingPdf()"]');
+    const clearBtn = actions.querySelector('button[onclick="clearShoppingList()"]');
+    if (printBtn) printBtn.disabled = !shoppingList.length;
+    if (pdfBtn) pdfBtn.disabled = !shoppingList.length;
+    if (clearBtn) clearBtn.disabled = !shoppingList.length;
+  }
+  if (!shoppingList.length) {
+    content.innerHTML = `<div class="shop-empty"><div class="big-icon">🛒</div><p>No recipes added yet.<br>Select a recipe above to get started.</p></div>`;
+    return;
   }
   const totalItems = shoppingList.reduce((s, e) => s + e.ingredients.length, 0);
 
@@ -4202,7 +4370,7 @@ function exportMealPdf() {
   const pairs = (m.recipes||[]).map(mr => {
     const r = savedRecipes.find(r => r.id === mr.id);
     return r ? {r, factor: _mealRecipeFactor(m, mr)} : null;
-  }).filter(Boolean);
+  }).filter(p => p && p.factor !== 0);
   if (!pairs.length) { showAlert("No recipes found."); return; }
   const html = buildMealRecipesHtml(pairs.map(p => p.r), pairs.map(p => p.factor));
   exportPdf(html, m.name || "meal");
@@ -4230,13 +4398,22 @@ function buildMealRecipesHtml(recipes, factors) {
 <title>Recipes</title><style>${PRINT_CSS}</style></head><body>${blocks}</body></html>`;
 }
 
-// Shared: build shopping list HTML from a list of shoppingList entries
+// Shared: build shopping list HTML from a list of shoppingList entries (with categories)
 function buildShoppingHtml(listEntries, title) {
   if (!listEntries || !listEntries.length) return null;
   const raw = listEntries.flatMap(e => e.ingredients);
   const combined = combineIngredients(raw);
   const stripQty = s => s.replace(/^[\d\s\/\u2013\-\.]+(?:tsp|tbsp|teaspoons?|tablespoons?|cups?|pints?|quarts?|gallons?|gal|qt|oz|ounces?|lbs?|pounds?|g|kg|ml|l)?\s*/i, "").toLowerCase();
-  combined.sort((a, b) => stripQty(a).localeCompare(stripQty(b)));
+  // Categorize and sort alphabetically within each category
+  const categorized = categorizeShopping(combined);
+  const catSections = SHOP_CATEGORY_NAMES.filter(cat => categorized[cat] && categorized[cat].length)
+    .map(cat => {
+      const sorted = [...categorized[cat]].sort((a, b) => stripQty(a).localeCompare(stripQty(b)));
+      return `<div class="cat-section">
+  <div class="cat-header">${escP(cat)}</div>
+  ${sorted.map(i => `<div class="ing">___ ${escP(i)}</div>`).join("\n  ")}
+</div>`;
+    }).join("\n");
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
 <title>${escP(title||"Shopping List")}</title>
 <style>
@@ -4250,9 +4427,11 @@ function buildShoppingHtml(listEntries, title) {
   body { font-family:'Comic Sans MS','Chalkboard SE','Comic Sans',cursive; font-size:11pt; color:#000; }
   .title { text-align:center; font-weight:bold; font-size:14pt; margin-bottom:10pt; }
   .ing { font-size:11pt; line-height:1.55; }
+  .cat-section { margin-bottom:12pt; }
+  .cat-header { font-weight:bold; font-size:11pt; text-transform:uppercase; letter-spacing:0.5px; border-bottom:0.5pt solid #555; margin-bottom:4pt; padding-bottom:2pt; }
 </style></head><body>
 <div class="title">${escP(title||"Shopping List")}</div>
-${combined.map(i => `<div class="ing">___ ${escP(i)}</div>`).join("\n")}
+${catSections}
 </body></html>`;
 }
 
@@ -4443,7 +4622,7 @@ function renderGroupMealDetail() {
       <div class="recipe-toolbar">
         <div class="recipe-toolbar-left"></div>
         <div class="recipe-toolbar-right">
-          <button class="btn btn-ghost" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="printGroupShoppingByMeal()">🛒 Print List</button>
+          <button class="btn btn-ghost" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="printGroupShoppingCategorized()">🛒 Print List</button>
           <button class="btn btn-ghost" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="printGroupRecipes()">🖨 Print Recipes</button>
           <button class="btn btn-dark" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="exportGroupFolderPdf()">📁 Export PDF</button>
           <button class="btn btn-danger" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="deleteGroupMeal(${g.id})">🗑 Delete</button>
@@ -4660,6 +4839,7 @@ function _groupAllRecipes() {
     // Meal-level effective servings (fallback chain below recipe level)
     const mealServings = gm.servings != null ? gm.servings
                        : (g.default_servings != null ? g.default_servings : null);
+    if (mealServings !== null && parseFloat(mealServings) === 0) return; // skip entire meal
     (full.recipes||[]).forEach(mr => {
       if (!seen.has(mr.id)) {
         seen.add(mr.id);
@@ -4772,6 +4952,14 @@ function printGroupShoppingByMeal() {
   doPrint(html);
 }
 
+function printGroupShoppingCategorized() {
+  if (!selectedGroupMeal) return;
+  const entries = _groupShoppingEntries();
+  const html = buildShoppingHtml(entries, selectedGroupMeal.name + " — Shopping List");
+  if (!html) { showAlert("No ingredients found."); return; }
+  doPrint(html);
+}
+
 async function exportGroupShoppingByMealPdf() {
   if (!selectedGroupMeal) return;
   const html = buildShoppingHtmlByMeal(selectedGroupMeal);
@@ -4786,9 +4974,14 @@ async function exportGroupFolderPdf() {
 
   const pdfs = [];
 
-  // Shopping list PDF (per-meal format)
+  // Shopping list by meal
   const shopHtml = buildShoppingHtmlByMeal(g);
-  if (shopHtml) pdfs.push({ filename: "Shopping List", html: shopHtml });
+  if (shopHtml) pdfs.push({ filename: "Shopping List by Meal", html: shopHtml });
+
+  // Shopping list by category
+  const shopCatEntries = _groupShoppingEntries();
+  const shopCatHtml = buildShoppingHtml(shopCatEntries, g.name + " — Shopping List");
+  if (shopCatHtml) pdfs.push({ filename: "Shopping List by Category", html: shopCatHtml });
 
   // One PDF per meal
   (g.meals || []).forEach(gm => {
@@ -4797,6 +4990,7 @@ async function exportGroupFolderPdf() {
     const rs = gm.recipe_servings || {};
     const mealServings = gm.servings != null ? gm.servings
                        : (g.default_servings != null ? g.default_servings : null);
+    if (mealServings !== null && parseFloat(mealServings) === 0) return; // skip entire meal
     const pairs = full.recipes.map(mr => {
       const r = savedRecipes.find(r => r.id === mr.id);
       if (!r) return null;
@@ -4869,6 +5063,84 @@ function doPrint(fullHtml) {
   window.print();
   document.head.removeChild(ps);
   document.body.removeChild(po);
+}
+
+const CHANGELOG = [
+  {
+    version: "v1.2.5",
+    notes: [
+      "Drag and drop to reorder ingredients, steps, and sections in recipe editor",
+      "Shopping list print now shows ingredients sorted A-Z within each category with category headers",
+      "Group meal 'Print List' prints a fully categorized shopping list",
+      "Group meal 'Export PDF' includes both a by-meal shopping list AND a categorized shopping list",
+      "Setting 0 servings on a recipe or meal in a group meal removes it from all printing and exporting",
+      "Setting 0 servings on a recipe in a meal's print also removes it",
+      "'By Recipe' / 'By Category' in shopping is now a dropdown",
+      "'By Title' / 'By Ingredient' search in recipes is now a dropdown",
+      "Shopping list toolbar always visible — print/export disabled when list is empty",
+      "Shopping categories window: fixed height, category filter dropdown, Clear All button",
+      "Cross-computer sync fix: cookbook files now use single-file SQLite mode (no WAL sidecars) so cloud sync works cleanly",
+      "Fixed 'table recipes has no column named base_recipe' when switching cookbooks",
+    ]
+  },
+  {
+    version: "v1.2.4",
+    notes: [
+      "Update no longer opens two windows or shows 'Failed to load Python DLL' error",
+      "Link external cookbook files (network drives, Google Drive, Dropbox) from the Cookbooks tab",
+    ]
+  },
+  {
+    version: "v1.2.1",
+    notes: [
+      "PDF export works without Edge/GTK (falls back to Edge if WeasyPrint unavailable)",
+      "Backup restore 'file not found' fixed (Windows path escaping)",
+      "0 servings on recipe in group meal correctly skips it from shopping and printing",
+      "Shopping categories settings: assign each ingredient to a category, auto-assign by keyword",
+      "Daily auto-backup with restore from Settings",
+    ]
+  },
+  {
+    version: "v1.2.0",
+    notes: [
+      "PDF export no longer requires Edge browser update",
+      "Multi-category filter on recipes page",
+      "Ingredient search toggle on recipes page",
+      "Copy meal button",
+      "Reorder meals within a group meal",
+      "Per-meal shopping list in group meal export",
+      "Category filter when browsing meals in a group meal",
+      "App reloads data when switching back to it (shared cookbooks)",
+      "Last modified date on recipe detail view",
+      "Numbers in instructions scale with servings",
+    ]
+  },
+  {
+    version: "v1.1.5",
+    notes: [
+      "Changelog tab added to the menu bar",
+      "Help panel scrollbar fix",
+      "Help sidebar category names no longer overflow",
+      "App opens maximised and in front after an update install",
+    ]
+  },
+];
+
+function showChangelogPanel() {
+  const el = document.getElementById("changelog-content");
+  el.innerHTML = CHANGELOG.map(entry => `
+    <div style="margin-bottom:1.2rem">
+      <div style="font-weight:800;font-size:1rem;color:var(--red);margin-bottom:0.35rem">${entry.version}</div>
+      <ul style="margin:0;padding-left:1.2rem">
+        ${entry.notes.map(n => `<li style="font-size:0.88rem;color:var(--text);line-height:1.65;margin-bottom:0.2rem">${n}</li>`).join("")}
+      </ul>
+    </div>
+  `).join("");
+  document.getElementById("changelog-modal-backdrop").hidden = false;
+}
+function closeChangelogPanel(e) {
+  if (!e || e.target === document.getElementById("changelog-modal-backdrop"))
+    document.getElementById("changelog-modal-backdrop").hidden = true;
 }
 </script>
 </body>
