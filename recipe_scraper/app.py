@@ -1270,11 +1270,24 @@ def api_run_installer():
         safe_path = path.replace('"', '""')
         with open(vbs_path, "w", encoding="utf-8") as f:
             f.write('Set sh = CreateObject("WScript.Shell")\r\n')
+            f.write('Set fso = CreateObject("Scripting.FileSystemObject")\r\n')
+            # Kill the running app and wait for it to fully exit
             f.write('WScript.Sleep 2000\r\n')
             f.write('sh.Run "taskkill /f /im RecipeManager.exe", 0, True\r\n')
-            f.write('WScript.Sleep 1000\r\n')
-            f.write(f'sh.Run Chr(34) & "{safe_path}" & Chr(34) & " /SILENT /RESTARTAPPLICATIONS", 0, False\r\n')
-            f.write(f'Set fso = CreateObject("Scripting.FileSystemObject")\r\n')
+            f.write('WScript.Sleep 1500\r\n')
+            # Run installer silently — bWaitOnReturn=True so we wait until it
+            # fully finishes before we try to launch the new exe.
+            # /RESTARTAPPLICATIONS is intentionally omitted: it uses the Windows
+            # Restart Manager which re-launches via the stale _MEI temp path,
+            # causing "Failed to load Python DLL" on some machines.
+            f.write(f'sh.Run Chr(34) & "{safe_path}" & Chr(34) & " /SILENT", 1, True\r\n')
+            # After the installer exits, launch the freshly-installed exe directly.
+            # ExpandEnvironmentStrings resolves %ProgramFiles% correctly on all locales.
+            f.write('Dim exePath\r\n')
+            f.write('exePath = sh.ExpandEnvironmentStrings("%ProgramFiles%") & "\\Macleay Recipe Manager\\RecipeManager.exe"\r\n')
+            f.write('If fso.FileExists(exePath) Then\r\n')
+            f.write('    sh.Run Chr(34) & exePath & Chr(34), 1, False\r\n')
+            f.write('End If\r\n')
             f.write(f'fso.DeleteFile "{vbs_path}", True\r\n')
 
         subprocess.Popen(
