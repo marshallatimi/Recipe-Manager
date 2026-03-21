@@ -482,6 +482,11 @@
       <div class="grid-controls-left">
         <input class="grid-search-input" id="recipe-search-input" type="search"
           placeholder="🔍 Search recipes…" oninput="applySort()" autocomplete="off">
+        <button id="ing-search-toggle" onclick="toggleIngSearch()"
+          title="Toggle ingredient search"
+          style="padding:0.3rem 0.7rem;border:1px solid var(--border);border-radius:5px;background:var(--card);color:var(--text);font-size:0.82rem;cursor:pointer;white-space:nowrap">
+          🔍 By Title
+        </button>
         <label>Sort:</label>
         <select id="sort-select" onchange="applySort()">
           <option value="newest">Newest</option>
@@ -492,12 +497,19 @@
           <option value="mostused">Most Used</option>
         </select>
         <label>Category:</label>
-        <input type="text" id="cat-filter" list="cat-filter-list"
-          oninput="applySort()" onchange="applySort()"
-          placeholder="All categories"
-          autocomplete="off"
-          style="padding:0.3rem 0.55rem;border:1px solid var(--border);border-radius:5px;background:var(--card);color:var(--text);font-size:0.82rem;width:140px">
-        <datalist id="cat-filter-list"></datalist>
+        <div id="cat-filter-wrap" style="position:relative;display:inline-block">
+          <button id="cat-filter-btn" onclick="toggleCatFilterDropdown(event)"
+            style="padding:0.3rem 0.55rem;border:1px solid var(--border);border-radius:5px;background:var(--card);color:var(--text);font-size:0.82rem;cursor:pointer;white-space:nowrap;min-width:120px;text-align:left">
+            All categories ▾
+          </button>
+          <div id="cat-filter-dropdown" hidden style="position:absolute;top:calc(100% + 4px);left:0;z-index:999;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.18);min-width:180px;max-height:260px;overflow-y:auto;padding:0.3rem 0">
+            <div style="padding:0.3rem 0.7rem 0.4rem;font-size:0.78rem;color:var(--muted)">Click to toggle. Multiple OK.</div>
+            <div id="cat-filter-options"></div>
+            <div style="padding:0.3rem 0.7rem;border-top:1px solid var(--border);margin-top:0.2rem">
+              <button onclick="clearCatFilter()" style="background:none;border:none;font-size:0.8rem;color:var(--red);cursor:pointer;padding:0">Clear all</button>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="grid-controls-right">
         <button class="btn btn-ghost" style="font-size:0.88rem;padding:0.45rem 1rem" onclick="openImportRecipesModal()">📥 Import</button>
@@ -517,6 +529,7 @@
   <div id="shopping-actions" class="recipe-toolbar" style="margin-bottom:1rem" hidden>
     <div class="recipe-toolbar-left"></div>
     <div class="recipe-toolbar-right">
+      <button class="btn btn-ghost" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="toggleShopCategories()">📦 By Category</button>
       <button class="btn btn-ghost" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="printShoppingList()">🖨 Print List</button>
       <button class="btn btn-dark"  style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="exportShoppingPdf()">💾 Save PDF</button>
       <button class="btn btn-danger" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="clearShoppingList()">🗑 Clear All</button>
@@ -802,6 +815,15 @@
       </div>
     </div>
 
+    <div class="settings-section">
+      <h4>Backups</h4>
+      <div class="settings-row">
+        <button class="btn btn-ghost" style="font-size:0.82rem" onclick="createManualBackup()">💾 Backup Now</button>
+        <button class="btn btn-ghost" style="font-size:0.82rem;margin-left:0.5rem" onclick="showBackupRestore()">📂 Restore…</button>
+      </div>
+      <div id="backup-list-wrap" hidden style="margin-top:0.5rem;max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:0.3rem"></div>
+    </div>
+
     <div class="img-modal-btns" style="margin-top:1rem">
       <button class="btn btn-ghost" onclick="closeSettingsPanel()">Close</button>
     </div>
@@ -1037,36 +1059,102 @@ async function loadSavedRecipes() {
 }
 
 function updateCatFilter() {
-  const inp = document.getElementById("cat-filter");
-  const dl  = document.getElementById("cat-filter-list");
-  if (!inp || !dl) return;
-  const cats = [...new Set(savedRecipes.flatMap(r => r.categories && r.categories.length ? r.categories : (r.category ? [r.category] : [])))].filter(Boolean).sort();
-  dl.innerHTML = cats.map(c => `<option value="${esc(c)}">`).join("");
-  if (!cats.includes(inp.value)) { inp.value = ""; currentCatFilter = ""; }
-  else currentCatFilter = inp.value;
+  // No-op: category filter is now a multi-select dropdown; renderCatFilterOptions() handles populating it
 }
 
 function applySort() {
   currentSort = document.getElementById("sort-select").value;
-  currentCatFilter = document.getElementById("cat-filter").value;
   localStorage.setItem("recipeSort", currentSort);
-  localStorage.setItem("recipeCatFilter", currentCatFilter);
+  renderGrid();
+}
+
+// ── Multi-category filter ──────────────────────────────────────
+let _activeCatFilters = new Set();
+
+function toggleCatFilterDropdown(e) {
+  e.stopPropagation();
+  const dd = document.getElementById("cat-filter-dropdown");
+  if (!dd) return;
+  if (dd.hidden) {
+    renderCatFilterOptions();
+    dd.hidden = false;
+    document.addEventListener("click", _closeCatFilter, {once: true});
+  } else {
+    dd.hidden = true;
+  }
+}
+function _closeCatFilter(e) {
+  const wrap = document.getElementById("cat-filter-wrap");
+  if (wrap && !wrap.contains(e.target)) {
+    const dd = document.getElementById("cat-filter-dropdown");
+    if (dd) dd.hidden = true;
+  }
+}
+function renderCatFilterOptions() {
+  const opts = document.getElementById("cat-filter-options");
+  if (!opts) return;
+  const cats = [...new Set(savedRecipes.flatMap(r => r.categories && r.categories.length ? r.categories : (r.category ? [r.category] : [])))].filter(Boolean).sort();
+  opts.innerHTML = cats.map(c => `
+    <div onclick="toggleCatFilterOption('${c.replace(/'/g,"\\'")}',event)"
+      style="padding:0.35rem 0.7rem;cursor:pointer;font-size:0.85rem;color:var(--text);display:flex;align-items:center;gap:0.4rem;${_activeCatFilters.has(c)?'background:#f0e9e9;font-weight:700;color:var(--red)':''}">
+      <span style="font-size:1rem">${_activeCatFilters.has(c)?'✓':'○'}</span>
+      ${esc(c)}
+    </div>`).join("");
+}
+function toggleCatFilterOption(cat, e) {
+  if (e) e.stopPropagation();
+  if (_activeCatFilters.has(cat)) _activeCatFilters.delete(cat);
+  else _activeCatFilters.add(cat);
+  renderCatFilterOptions();
+  updateCatFilterBtn();
+  renderGrid();
+}
+function clearCatFilter() {
+  _activeCatFilters.clear();
+  updateCatFilterBtn();
+  const dd = document.getElementById("cat-filter-dropdown");
+  if (dd) dd.hidden = true;
+  renderGrid();
+}
+function updateCatFilterBtn() {
+  const btn = document.getElementById("cat-filter-btn");
+  if (!btn) return;
+  if (_activeCatFilters.size > 0) {
+    btn.innerHTML = `${[..._activeCatFilters].slice(0,2).map(c => esc(c)).join(", ")}${_activeCatFilters.size > 2 ? ` +${_activeCatFilters.size-2}` : ""} <span style="background:var(--red);color:#fff;border-radius:99px;padding:0 5px;font-size:0.75rem;margin-left:4px">${_activeCatFilters.size}</span> ▾`;
+  } else {
+    btn.innerHTML = 'All categories ▾';
+  }
+}
+
+// ── Ingredient search toggle ───────────────────────────────────
+let _ingSearchMode = false;
+function toggleIngSearch() {
+  _ingSearchMode = !_ingSearchMode;
+  const btn = document.getElementById("ing-search-toggle");
+  if (btn) btn.innerHTML = _ingSearchMode ? '🥕 By Ingredient' : '🔍 By Title';
   renderGrid();
 }
 
 function getSortedRecipes() {
   const q = (document.getElementById("recipe-search-input")?.value || "").trim().toLowerCase();
   const rCats = r => r.categories && r.categories.length ? r.categories : (r.category ? [r.category] : []);
-  let list = currentCatFilter
-    ? savedRecipes.filter(r => rCats(r).includes(currentCatFilter))
+  let list = _activeCatFilters.size > 0
+    ? savedRecipes.filter(r => {
+        const rc = rCats(r);
+        return [..._activeCatFilters].some(f => rc.includes(f));
+      })
     : [...savedRecipes];
   if (q) {
-    list = list.filter(r =>
-      (r.title || "").toLowerCase().includes(q) ||
-      rCats(r).join(" ").toLowerCase().includes(q) ||
-      (r.servings || "").toLowerCase().includes(q) ||
-      (r.site_name || "").toLowerCase().includes(q)
-    );
+    list = list.filter(r => {
+      if (_ingSearchMode) {
+        const allIngs = (r.ingredient_groups||[]).flatMap(g => g.ingredients||[]).join(" ").toLowerCase();
+        return allIngs.includes(q) || (r.title||"").toLowerCase().includes(q);
+      }
+      return (r.title || "").toLowerCase().includes(q) ||
+        rCats(r).join(" ").toLowerCase().includes(q) ||
+        (r.servings || "").toLowerCase().includes(q) ||
+        (r.site_name || "").toLowerCase().includes(q);
+    });
   }
   switch (currentSort) {
     case "newest":   list.sort((a,b) => b.id - a.id); break;
@@ -1151,6 +1239,8 @@ async function patchRecipe() {
   if (idx !== -1) savedRecipes[idx] = {...selectedRecipe};
   updateCatFilter();
   showToast();
+  // Reload meals to pick up recipe changes
+  try { savedMeals = await (await fetch("/meals")).json(); } catch {}
 }
 
 // ── Category tag editor ───────────────────────────────────────
@@ -1315,6 +1405,17 @@ async function patchMeal() {
   const idx = savedMeals.findIndex(m => m.id === selectedMeal.id);
   if (idx !== -1) savedMeals[idx] = {...selectedMeal};
   showToast();
+}
+
+async function copyCurrentMeal() {
+  const m = selectedMeal;
+  if (!m) return;
+  const res = await fetch(`/meals/${m.id}/copy`, {method:"POST"});
+  if (!res.ok) { showAlert("Failed to copy meal."); return; }
+  const newMeal = await res.json();
+  savedMeals.unshift(newMeal);
+  showToast(`Copied as "${newMeal.name}"`);
+  openMeal(newMeal.id);
 }
 
 async function removeRecipePhoto() {
@@ -1857,6 +1958,9 @@ function buildSavedHTML(r) {
      </div>`
     : `<button class="hero-placeholder-btn" onclick="openImageModal()">+ Add Photo</button>`;
   const linkHtml = r.source_url ? `<a class="site-badge" href="${esc(r.source_url)}" target="_blank" rel="noopener" style="text-decoration:none">${esc(r.source_url)}</a><br>` : "";
+  const modDateStr = r.updated_at ? new Date(r.updated_at.replace(' ','T')+'Z').toLocaleDateString() : null;
+  const addedDateStr = r.created_at ? new Date(r.created_at.replace(' ','T')+'Z').toLocaleDateString() : null;
+  const dateLine = (modDateStr || addedDateStr) ? `<div style="font-size:0.75rem;color:var(--muted);margin-bottom:0.3rem">${modDateStr ? `Last modified: ${modDateStr}` : ""}${modDateStr && addedDateStr ? " · " : ""}${addedDateStr ? `Added: ${addedDateStr}` : ""}</div>` : "";
   const multiIngGroup = ig.length > 1 || (ig[0] && ig[0].purpose);
   const multiStepGroup = sg.length > 1 || (sg[0] && sg[0].purpose);
   const notesHtml = `<div class="notes-section no-print" style="margin:0.8rem 0 0.4rem;padding:0.7rem 0.9rem;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
@@ -1877,7 +1981,7 @@ function buildSavedHTML(r) {
         <button class="btn btn-danger" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="deleteRecipe()">🗑 Delete</button>
       </div>
     </div>
-    ${linkHtml}
+    ${linkHtml}${dateLine}
     <div class="editable-title" onclick="inlineEditTitle(this)" title="Click to edit">${esc(r.title||"Untitled Recipe")}</div>
     <div class="meta">
       <div class="meta-item" style="align-items:flex-start">🏷️
@@ -1965,12 +2069,14 @@ function buildRecipeBlock(r, factor) {
   });
   const ingSections = `<div class="ings">${ingItems}</div>`;
 
-  // Directions
+  // Directions — scale measurements in step text when factor != 1
   let stepSections = "";
   sg.forEach(g => {
     if (multiStepGroup && g.purpose)
       stepSections += `<p class="dir-hdr">${escP(g.purpose)}</p>`;
-    const para = (g.steps || []).filter(s => s && s.trim()).join(" ").trim();
+    const steps = (g.steps || []).filter(s => s && s.trim());
+    const scaledSteps = isScaled ? steps.map(s => scaleIngredient(s, factor)) : steps;
+    const para = scaledSteps.join(" ").trim();
     if (para) stepSections += `<p class="directions">${escP(para)}</p>`;
   });
 
@@ -2414,6 +2520,53 @@ function showSettingsPanel() {
 function closeSettingsPanel(e) {
   if (!e || e.target === document.getElementById("settings-modal-backdrop"))
     document.getElementById("settings-modal-backdrop").hidden = true;
+}
+
+// ── Backup ────────────────────────────────────────────────────
+async function createManualBackup() {
+  try {
+    const res = await fetch("/backup/create", {method:"POST"});
+    const data = await res.json();
+    if (data.ok) showToast("Backup created: " + data.filename);
+    else showAlert("Backup failed.");
+  } catch { showAlert("Backup failed."); }
+}
+
+async function showBackupRestore() {
+  const wrap = document.getElementById("backup-list-wrap");
+  if (!wrap) return;
+  wrap.hidden = !wrap.hidden;
+  if (wrap.hidden) return;
+  try {
+    const backups = await (await fetch("/backup/list")).json();
+    if (!backups.length) {
+      wrap.innerHTML = `<div style="padding:0.5rem;font-size:0.82rem;color:var(--muted)">No backups found.</div>`;
+      return;
+    }
+    wrap.innerHTML = backups.map(b => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:0.35rem 0.6rem;border-bottom:1px solid var(--border)">
+        <span style="font-size:0.8rem;color:var(--text)">${esc(b.filename.replace(/\.cookbook$/, ""))}</span>
+        <button class="btn btn-ghost" style="font-size:0.75rem;padding:0.2rem 0.5rem" onclick="restoreBackup('${b.path.replace(/'/g, "\\'")}','${esc(b.filename)}')">Restore</button>
+      </div>`).join("");
+  } catch { wrap.innerHTML = `<div style="padding:0.5rem;font-size:0.82rem;color:var(--red)">Failed to load backups.</div>`; }
+}
+
+async function restoreBackup(path, filename) {
+  const ok = await showConfirm(`Restore from "${filename}"? This will replace ALL current recipes and cookbooks.`, "Restore", "btn-danger");
+  if (!ok) return;
+  try {
+    const res = await fetch("/backup/restore", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({path})
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showToast("Restored! Reloading…");
+      setTimeout(() => location.reload(), 1200);
+    } else {
+      showAlert("Restore failed: " + (data.error || "Unknown error"));
+    }
+  } catch { showAlert("Restore failed."); }
 }
 
 // ── Auto-Update ───────────────────────────────────────────────────────────────
@@ -3389,6 +3542,7 @@ function renderMealDetail() {
         <div class="recipe-toolbar-right">
           <button class="btn btn-ghost" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="printMeal()">🖨 Print All</button>
           <button class="btn btn-dark" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="exportMealPdf()">💾 Save PDF</button>
+          <button class="btn btn-ghost" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="copyCurrentMeal()">📋 Copy</button>
           <button class="btn btn-danger" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="deleteMealById(${m.id},null,true)">🗑 Delete</button>
         </div>
       </div>
@@ -3660,6 +3814,11 @@ async function confirmShopAdd() {
     : shopAddTarget.data.recipes.map(mr => savedRecipes.find(r => r.id===mr.id)).filter(Boolean);
 
   toAdd.forEach(r => {
+    // If servings is explicitly set to 0, skip this recipe
+    if (servings !== undefined && servings !== null && parseFloat(servings) === 0) {
+      showToast(`${r.title} has 0 servings — skipped`);
+      return;
+    }
     const origServings = r.servings_num || parseServingsNumJS(r.servings) || servings;
     const factor = servings / origServings;
     const ig = r.ingredient_groups || [{purpose:null, ingredients:r.ingredients||[]}];
@@ -3715,6 +3874,40 @@ async function clearShoppingList() {
   renderShoppingList();
 }
 
+// ── Shopping category view ─────────────────────────────────────
+const SHOP_CATEGORIES = {
+  "Spices": ["pepper", "salt", "cumin", "paprika", "turmeric", "cinnamon", "oregano", "basil", "thyme", "rosemary", "sage", "parsley", "cilantro", "dill", "bay leaf", "chili flake", "cayenne", "garlic powder", "onion powder", "nutmeg", "coriander", "cardamom", "clove", "ginger powder", "allspice", "curry", "mustard seed", "chili powder", "Old Bay", "Italian seasoning", "seasoning", "spice"],
+  "Refrigerated": ["milk", "cream", "cheese", "butter", "egg", "yogurt", "sour cream", "cream cheese", "cottage cheese", "heavy cream", "half and half", "buttermilk", "tofu", "tempeh", "chicken", "beef", "pork", "turkey", "shrimp", "fish", "salmon", "bacon", "ham", "sausage", "ground beef", "ground pork", "ground turkey"],
+  "Frozen": ["frozen", "ice cream", "peas frozen", "corn frozen", "edamame"],
+  "Pantry": ["flour", "sugar", "oil", "vinegar", "pasta", "rice", "bread", "cracker", "cereal", "oat", "honey", "syrup", "baking powder", "baking soda", "yeast", "cocoa", "chocolate", "vanilla", "canned", "tomato", "bean", "lentil", "chickpea", "broth", "stock", "sauce", "soy sauce", "hot sauce", "ketchup", "mustard", "mayo", "mayonnaise", "olive oil", "vegetable oil", "coconut oil", "sesame oil", "noodle", "crumb", "breadcrumb", "cornstarch", "arrowroot", "gelatin", "agar", "water", "lemon juice", "lime juice", "wine", "onion", "garlic", "ginger", "apple", "banana", "orange", "lemon", "lime", "potato", "carrot", "celery", "bell pepper", "zucchini", "squash", "broccoli", "cauliflower", "spinach", "kale", "lettuce", "tomato sauce", "salsa", "pickle", "olive", "artichoke", "corn", "peas", "mushroom"],
+  "Utensils / Plates / Cups / Boats": ["plate", "cup", "bowl", "fork", "spoon", "knife", "napkin", "straw", "boat", "tray", "container", "wrap", "foil", "parchment", "toothpick", "skewer"]
+};
+
+let _shopCategoryView = false;
+function toggleShopCategories() {
+  _shopCategoryView = !_shopCategoryView;
+  renderShoppingList();
+}
+
+function categorizeShopping(combined) {
+  const categorized = {};
+  Object.keys(SHOP_CATEGORIES).forEach(cat => categorized[cat] = []);
+  categorized["Other"] = [];
+  combined.forEach(ing => {
+    const lower = ing.toLowerCase();
+    let matched = false;
+    for (const [cat, keywords] of Object.entries(SHOP_CATEGORIES)) {
+      if (keywords.some(k => lower.includes(k.toLowerCase()))) {
+        categorized[cat].push(ing);
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) categorized["Other"].push(ing);
+  });
+  return categorized;
+}
+
 function renderShoppingList() {
   const content = document.getElementById("shopping-list-content");
   const actions = document.getElementById("shopping-actions");
@@ -3728,6 +3921,18 @@ function renderShoppingList() {
 
   if (actions) actions.hidden = false;
   const totalItems = shoppingList.reduce((s, e) => s + e.ingredients.length, 0);
+
+  if (_shopCategoryView) {
+    const allIngs = shoppingList.flatMap(e => e.ingredients);
+    const categorized = categorizeShopping(allIngs);
+    const catHtml = Object.entries(categorized).filter(([,v]) => v.length).map(([cat, ings]) => `
+      <div style="margin-bottom:1rem">
+        <div style="font-weight:700;font-size:0.82rem;text-transform:uppercase;letter-spacing:0.6px;color:var(--red);margin-bottom:0.4rem">${esc(cat)}</div>
+        ${ings.map(i => `<div style="font-size:0.88rem;padding:0.15rem 0">___ ${esc(i)}</div>`).join("")}
+      </div>`).join("");
+    content.innerHTML = `<div style="margin-bottom:0.5rem;font-size:0.82rem;color:var(--muted)">📦 Viewing by category. <button onclick="_shopCategoryView=false;renderShoppingList()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:0.82rem;padding:0">Back to list view</button></div>${catHtml}<p class="shop-summary">${totalItems} total ingredient${totalItems===1?"":"s"} across ${shoppingList.length} recipe${shoppingList.length===1?"":"s"}</p>`;
+    return;
+  }
 
   content.innerHTML = shoppingList.map((entry, idx) => `
     <div class="shop-entry">
@@ -4002,6 +4207,25 @@ function toggleGmMeal(mealId) {
   if (list) list.classList.toggle("open", _gmExpandedMeals.has(mealId));
 }
 
+async function moveGroupMealSlot(slotId, direction) {
+  const g = selectedGroupMeal;
+  if (!g) return;
+  const meals = g.meals || [];
+  const idx = meals.findIndex(m => m.slot_id === slotId);
+  if (idx < 0) return;
+  const newIdx = idx + direction;
+  if (newIdx < 0 || newIdx >= meals.length) return;
+  // Swap
+  [g.meals[idx], g.meals[newIdx]] = [g.meals[newIdx], g.meals[idx]];
+  // Send new order to backend
+  const order = g.meals.map(m => m.slot_id);
+  await fetch(`/group-meals/${g.id}/slots/reorder`, {
+    method:"PATCH", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({order})
+  });
+  renderGroupMealDetail();
+}
+
 function renderGroupMealDetail() {
   const g = selectedGroupMeal;
   if (!g) return;
@@ -4051,6 +4275,8 @@ function renderGroupMealDetail() {
               title="Default servings for all recipes in this meal"
               onchange="updateGroupMealServings(${m.slot_id != null ? m.slot_id : m.id}, this.value, ${m.slot_id != null})"
               onclick="event.stopPropagation()"/>
+            <button class="btn-icon" onclick="event.stopPropagation();moveGroupMealSlot(${m.slot_id}, -1)" title="Move up" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:1rem;padding:0 2px">↑</button>
+            <button class="btn-icon" onclick="event.stopPropagation();moveGroupMealSlot(${m.slot_id}, 1)" title="Move down" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:1rem;padding:0 2px">↓</button>
             <button class="del-btn" style="font-size:0.9rem;padding:0 4px;flex-shrink:0"
               onclick="event.stopPropagation();removeMealFromGroupMeal(${m.slot_id != null ? m.slot_id : m.id}, ${m.slot_id != null})">✕</button>
           </div>
@@ -4064,6 +4290,8 @@ function renderGroupMealDetail() {
   const addRow = available.length ? `
     <div style="margin-top:0.9rem">
       <div class="section-title" style="margin-bottom:0.5rem">Add Meal</div>
+      <input type="text" id="gm-cat-filter" placeholder="Filter by category…" oninput="renderGroupMealBrowser()"
+        style="padding:0.3rem 0.55rem;border:1px solid var(--border);border-radius:5px;background:var(--card);color:var(--text);font-size:0.82rem;width:140px;margin-bottom:0.4rem"/>
       <div class="shop-search-bar" style="margin-bottom:0.5rem">
         <input type="text" id="gm-meal-search" placeholder="Search meals…" oninput="renderGroupMealBrowser()"/>
       </div>
@@ -4077,6 +4305,8 @@ function renderGroupMealDetail() {
         <div class="recipe-toolbar-left"></div>
         <div class="recipe-toolbar-right">
           <button class="btn btn-ghost" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="printGroupShopping()">🛒 Print List</button>
+          <button class="btn btn-ghost" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="printGroupShoppingByMeal()">🛒 List by Meal</button>
+          <button class="btn btn-ghost" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="exportGroupShoppingByMealPdf()">📄 Export by Meal</button>
           <button class="btn btn-ghost" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="printGroupRecipes()">🖨 Print Recipes</button>
           <button class="btn btn-dark" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="exportGroupFolderPdf()">📁 Export PDF</button>
           <button class="btn btn-danger" style="padding:0.35rem 0.8rem;font-size:0.82rem" onclick="deleteGroupMeal(${g.id})">🗑 Delete</button>
@@ -4111,7 +4341,15 @@ function renderGroupMealBrowser() {
   const browser = document.getElementById("gm-meal-browser");
   if (!browser || !selectedGroupMeal) return;
   const q = (document.getElementById("gm-meal-search")?.value || "").toLowerCase();
-  const matches = savedMeals.filter(m => !q || m.name.toLowerCase().includes(q));
+  const catFilter = (document.getElementById("gm-cat-filter")?.value || "").toLowerCase();
+  const matches = savedMeals.filter(m => {
+    if (q && !m.name.toLowerCase().includes(q)) return false;
+    if (catFilter) {
+      const mCats = m.categories || (m.category ? [m.category] : []);
+      return mCats.some(c => c.toLowerCase().includes(catFilter));
+    }
+    return true;
+  });
   browser.innerHTML = matches.length
     ? matches.map(m => `
         <div class="shop-recipe-row" onclick="addMealToGroupMeal(${m.id})">
@@ -4290,6 +4528,7 @@ function _groupAllRecipes() {
         if (r) {
           // Per-recipe override takes highest priority
           const effectiveServings = rs[mr.id] != null ? rs[mr.id] : mealServings;
+          if (effectiveServings !== null && parseFloat(effectiveServings) === 0) return; // skip 0-serving recipes
           const origNum = r.servings_num || parseServingsNumJS(r.servings) || null;
           const factor = (effectiveServings && origNum && origNum > 0)
                        ? effectiveServings / origNum : 1;
@@ -4343,6 +4582,64 @@ function exportGroupShoppingPdf() {
   exportPdf(html, selectedGroupMeal.name + " - Shopping List");
 }
 
+function buildShoppingHtmlByMeal(g) {
+  const escP = s => (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  const sections = [];
+  (g.meals||[]).forEach(gm => {
+    const full = savedMeals.find(m => m.id === gm.id);
+    if (!full || !full.recipes || !full.recipes.length) return;
+    const rs = gm.recipe_servings || {};
+    const mealServings = gm.servings != null ? gm.servings : (g.default_servings != null ? g.default_servings : null);
+    const ings = [];
+    full.recipes.forEach(mr => {
+      const effectiveServings = rs[mr.id] != null ? rs[mr.id] : mealServings;
+      if (effectiveServings !== null && parseFloat(effectiveServings) === 0) return;
+      const r = savedRecipes.find(r => r.id === mr.id);
+      if (!r) return;
+      const origNum = r.servings_num || parseServingsNumJS(r.servings) || null;
+      const factor = (effectiveServings && origNum && origNum > 0) ? effectiveServings / origNum : 1;
+      const igs = r.ingredient_groups || [{purpose:null, ingredients:r.ingredients||[]}];
+      const scaled = igs.flatMap(ig => (ig.ingredients||[]).filter(Boolean)).map(i => factor !== 1 && typeof scaleIngredient === "function" ? scaleIngredient(i, factor) : i);
+      ings.push(...scaled);
+    });
+    if (ings.length) sections.push({mealName: full.name, ingredients: ings});
+  });
+  if (!sections.length) return null;
+  const sectionHtml = sections.map(sec => `
+    <div class="meal-section">
+      <div class="meal-header">${escP(sec.mealName)}</div>
+      ${sec.ingredients.map(i => `<div class="ing">___ ${escP(i)}</div>`).join("\n")}
+    </div>`).join("\n");
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+<title>${escP(g.name)} — Shopping List by Meal</title>
+<style>
+  @page { size: letter portrait; margin: 0.75in 0.9in; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Comic Sans MS','Chalkboard SE',cursive; font-size:11pt; color:#000; }
+  .title { text-align:center; font-weight:bold; font-size:14pt; margin-bottom:14pt; }
+  .meal-section { margin-bottom:14pt; }
+  .meal-header { font-weight:bold; font-size:12pt; margin-bottom:6pt; border-bottom:1pt solid #000; padding-bottom:3pt; }
+  .ing { font-size:11pt; line-height:1.55; }
+</style></head><body>
+<div class="title">${escP(g.name)} — Shopping List by Meal</div>
+${sectionHtml}
+</body></html>`;
+}
+
+function printGroupShoppingByMeal() {
+  if (!selectedGroupMeal) return;
+  const html = buildShoppingHtmlByMeal(selectedGroupMeal);
+  if (!html) { showAlert("No ingredients found."); return; }
+  doPrint(html);
+}
+
+async function exportGroupShoppingByMealPdf() {
+  if (!selectedGroupMeal) return;
+  const html = buildShoppingHtmlByMeal(selectedGroupMeal);
+  if (!html) { showAlert("No ingredients found."); return; }
+  exportPdf(html, selectedGroupMeal.name + " - Shopping by Meal");
+}
+
 async function exportGroupFolderPdf() {
   const g = selectedGroupMeal;
   if (!g) return;
@@ -4390,6 +4687,21 @@ async function exportGroupFolderPdf() {
     showToast("");
   }
 }
+
+// ── Window focus reload (shared cookbook on network drives) ────
+let _lastFocusReload = 0;
+window.addEventListener("focus", async () => {
+  const now = Date.now();
+  if (now - _lastFocusReload < 30000) return; // max once per 30s
+  _lastFocusReload = now;
+  try {
+    savedRecipes = await (await fetch("/recipes")).json();
+    savedMeals = await (await fetch("/meals")).json();
+    updateCatFilter();
+    if (document.getElementById("tab-saved") && !document.getElementById("tab-saved").hidden) renderGrid();
+    if (document.getElementById("tab-meals") && !document.getElementById("tab-meals").hidden) renderMealList();
+  } catch {}
+});
 
 function doPrint(fullHtml) {
   // Inject content into the current window and call window.print().

@@ -123,7 +123,7 @@ class FileApi:
         return safe or "export"
 
     def save_pdf(self, html_content, suggested_name):
-        """Show a Save dialog then use Edge headless to render HTML → PDF."""
+        """Show a Save dialog then render HTML → PDF via WeasyPrint (no browser needed)."""
         safe_name = self._safe_filename(suggested_name)
         result = webview.windows[0].create_file_dialog(
             webview.SAVE_DIALOG,
@@ -132,36 +132,18 @@ class FileApi:
         )
         if not result:
             return {"ok": False, "msg": "Cancelled"}
-        # pywebview may return a tuple or a bare string
         pdf_path = result[0] if isinstance(result, (list, tuple)) else result
         if not pdf_path:
             return {"ok": False, "msg": "Cancelled"}
-        # Ensure .pdf extension
         if not pdf_path.lower().endswith(".pdf"):
             pdf_path += ".pdf"
-
-        import tempfile
-        tmp = None
         try:
-            with tempfile.NamedTemporaryFile(
-                mode='w', suffix='.html', delete=False, encoding='utf-8'
-            ) as f:
-                f.write(html_content)
-                tmp = f.name
-
-            file_url = "file:///" + tmp.replace("\\", "/")
-            err = _edge_html_to_pdf(_find_edge(), file_url, pdf_path)
+            err = _html_to_pdf(html_content, pdf_path)
             if err:
                 return {"ok": False, "msg": err}
             return {"ok": True, "path": pdf_path}
         except Exception as e:
             return {"ok": False, "msg": str(e)}
-        finally:
-            if tmp and os.path.exists(tmp):
-                try:
-                    os.unlink(tmp)
-                except OSError:
-                    pass
 
     def close_window(self):
         webview.windows[0].destroy()
@@ -169,13 +151,9 @@ class FileApi:
     def save_pdf_folder(self, pdfs, folder_name):
         """Ask the user for a parent folder, create a subfolder named after the
         group meal, then render each {filename, html} entry as a separate PDF."""
-        import tempfile
         safe_folder = self._safe_filename(folder_name) or "Group Export"
 
-        # Ask user to pick a parent folder using a save dialog as a proxy
-        result = webview.windows[0].create_file_dialog(
-            webview.FOLDER_DIALOG
-        )
+        result = webview.windows[0].create_file_dialog(webview.FOLDER_DIALOG)
         if not result:
             return {"ok": False, "msg": "Cancelled"}
         parent_dir = result[0] if isinstance(result, (list, tuple)) else result
@@ -185,66 +163,36 @@ class FileApi:
         out_dir = os.path.join(parent_dir, safe_folder)
         os.makedirs(out_dir, exist_ok=True)
 
-        edge_exe = _find_edge()
-
         saved = []
         for entry in pdfs:
             safe_name = self._safe_filename(entry.get("filename", "export"))
             pdf_path = os.path.join(out_dir, safe_name + ".pdf")
-            tmp = None
             try:
-                with tempfile.NamedTemporaryFile(
-                    mode='w', suffix='.html', delete=False, encoding='utf-8'
-                ) as f:
-                    f.write(entry["html"])
-                    tmp = f.name
-                file_url = "file:///" + tmp.replace("\\", "/")
-                err = _edge_html_to_pdf(edge_exe, file_url, pdf_path)
+                err = _html_to_pdf(entry["html"], pdf_path)
                 if err:
                     return {"ok": False, "msg": f"Failed on '{safe_name}': {err}"}
                 if os.path.exists(pdf_path):
                     saved.append(safe_name)
             except Exception as e:
                 return {"ok": False, "msg": f"Failed on '{safe_name}': {e}"}
-            finally:
-                if tmp and os.path.exists(tmp):
-                    try: os.unlink(tmp)
-                    except OSError: pass
 
         return {"ok": True, "folder": out_dir, "count": len(saved)}
 
     def print_preview(self, html_content):
-        """Render HTML → temp PDF via Edge headless (no headers/footers) then open
-        the temp file in the user's default PDF viewer so they can print cleanly."""
+        """Render HTML → temp PDF via WeasyPrint then open in the user's default viewer."""
         import tempfile
-        tmp_html = None
-        tmp_pdf  = None
+        tmp_pdf = None
         try:
-            # Write HTML to a temp file
-            with tempfile.NamedTemporaryFile(
-                mode='w', suffix='.html', delete=False, encoding='utf-8'
-            ) as f:
-                f.write(html_content)
-                tmp_html = f.name
-
-            # Temp PDF path (keep it; the OS viewer will open it)
-            tmp_pdf = tmp_html.replace('.html', '_print.pdf')
-
-            file_url = "file:///" + tmp_html.replace("\\", "/")
-            err = _edge_html_to_pdf(_find_edge(), file_url, tmp_pdf)
+            fd, tmp_pdf = tempfile.mkstemp(suffix='_print.pdf')
+            os.close(fd)
+            err = _html_to_pdf(html_content, tmp_pdf)
             if err:
                 return {"ok": False, "msg": err}
-
-            # Open PDF in the default viewer (Edge, Acrobat, etc.)
             os.startfile(tmp_pdf)
             return {"ok": True}
         except Exception as e:
             return {"ok": False, "msg": str(e)}
-        finally:
-            if tmp_html and os.path.exists(tmp_html):
-                try: os.unlink(tmp_html)
-                except OSError: pass
-            # Note: do NOT delete tmp_pdf here — the viewer needs it open
+        # Note: do NOT delete tmp_pdf — the viewer still needs it
 
     def save_csv_dialog(self, suggested_name="cookbook"):
         """Open a save dialog for exporting a CSV file."""
@@ -308,14 +256,51 @@ def _generate_app_icon() -> str | None:
         return None
 
 
+def _weasyprint_html_to_pdf(html_content: str, pdf_path: str) -> str | None:
+    """Render HTML string → pdf_path using WeasyPrint (pure Python, no browser needed).
+    Returns None on success, or an error string on failure.
+    """
+    try:
+        import weasyprint
+        weasyprint.HTML(string=html_content).write_pdf(pdf_path)
+        if os.path.exists(pdf_path):
+            return None  # success
+        return "PDF was not created by WeasyPrint."
+    except ImportError:
+        return "weasyprint_not_available"
+    except Exception as e:
+        return f"PDF generation error: {e}"
+
+
+def _html_to_pdf(html_content: str, pdf_path: str) -> str | None:
+    """Render HTML → PDF. Tries WeasyPrint first (pure Python, always works),
+    then falls back to Edge headless if WeasyPrint is unavailable.
+    Returns None on success, or an error string on failure.
+    """
+    err = _weasyprint_html_to_pdf(html_content, pdf_path)
+    if err == "weasyprint_not_available":
+        # WeasyPrint not installed — fall back to Edge headless
+        import tempfile
+        tmp = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode='w', suffix='.html', delete=False, encoding='utf-8'
+            ) as f:
+                f.write(html_content)
+                tmp = f.name
+            file_url = "file:///" + tmp.replace("\\", "/")
+            return _edge_html_to_pdf(_find_edge(), file_url, pdf_path)
+        finally:
+            if tmp and os.path.exists(tmp):
+                try: os.unlink(tmp)
+                except OSError: pass
+    return err  # None = success, or error string
+
+
 def _edge_html_to_pdf(edge_exe: str, file_url: str, pdf_path: str,
                       timeout: int = 30) -> str | None:
-    """Render file_url → pdf_path using Edge headless.
-
-    Tries the modern ``--headless=new`` flag first; falls back to the legacy
-    ``--headless`` flag for older Edge builds.  Uses check=False because some
-    Edge versions exit with a non-zero code even when the PDF is created.
-
+    """Render file_url → pdf_path using Edge headless (fallback only).
+    Tries --headless=new first, then legacy --headless.
     Returns None on success, or an error string on failure.
     """
     base = [
@@ -334,13 +319,12 @@ def _edge_html_to_pdf(edge_exe: str, file_url: str, pdf_path: str,
             if os.path.exists(pdf_path):
                 return None  # success
         except subprocess.TimeoutExpired:
-            return "Edge timed out while generating the PDF (>30 s)."
+            return "Timed out while generating the PDF (>30 s)."
         except FileNotFoundError:
-            return "Microsoft Edge was not found. Please ensure Edge is installed."
+            return "Microsoft Edge was not found."
         except Exception as e:
             return str(e)
-    return ("PDF was not created by Edge. "
-            "Make sure Microsoft Edge is installed and up to date.")
+    return "PDF was not created. Please ensure Microsoft Edge is installed and up to date."
 
 
 def _set_taskbar_icon(hwnd: int, ico_path: str) -> None:

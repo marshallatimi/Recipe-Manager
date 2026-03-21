@@ -3,3 +3,4 @@ recipe-scrapers>=15.0
 pywebview>=6.1
 requests>=2.31
 pillow>=10.0
+weasyprint>=60.0

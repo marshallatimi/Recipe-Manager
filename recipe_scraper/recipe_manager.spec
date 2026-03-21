@@ -21,6 +21,16 @@ datas += collect_data_files('mf2py')          # backcompat-rules file (fixes cra
 datas += collect_data_files('w3lib')
 datas += collect_data_files('parsel')
 
+# WeasyPrint ships CSS/font data files
+try:
+    datas += collect_data_files('weasyprint')
+except Exception:
+    pass
+try:
+    datas += collect_data_files('pyphen')
+except Exception:
+    pass
+
 # ── Hidden imports ────────────────────────────────────────────────────────────
 hiddenimports = (
     collect_submodules('recipe_scrapers') +
@@ -29,6 +39,7 @@ hiddenimports = (
     collect_submodules('jinja2') +
     collect_submodules('webview') +
     collect_submodules('mf2py') +
+    collect_submodules('weasyprint') +
     [
         'sqlite3',
         'json',
@@ -39,6 +50,12 @@ hiddenimports = (
         'encodings.ascii',
         'urllib.request',
         'threading',
+        'weasyprint',
+        'pydyf',
+        'fonttools',
+        'pyphen',
+        'cssselect2',
+        'tinycss2',
     ]
 )
 

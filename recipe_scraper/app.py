@@ -127,6 +127,27 @@ def startup():
     # Make sure the active cookbook has up-to-date schema
     init_db()
 
+    # Auto-backup: take a daily backup of the active cookbook
+    try:
+        import datetime, shutil
+        backup_dir = os.path.join(DATA_DIR, "backups")
+        os.makedirs(backup_dir, exist_ok=True)
+        today = datetime.date.today().strftime("%Y-%m-%d")
+        cb_name = os.path.splitext(os.path.basename(_active_db["path"]))[0]
+        today_backup = os.path.join(backup_dir, f"{cb_name}_{today}.cookbook")
+        if not os.path.exists(today_backup):
+            shutil.copy2(_active_db["path"], today_backup)
+            # Keep last 30 backups
+            all_backups = sorted([
+                os.path.join(backup_dir, f) for f in os.listdir(backup_dir)
+                if f.endswith(".cookbook")
+            ], key=os.path.getmtime)
+            for old in all_backups[:-30]:
+                try: os.remove(old)
+                except OSError: pass
+    except Exception:
+        pass
+
 
 app = Flask(__name__, static_folder=os.path.join(BASE_DIR, "static"))
 
@@ -171,7 +192,8 @@ def init_db():
         """)
         for col in ["ingredient_groups", "instruction_groups", "category TEXT DEFAULT NULL",
                     "view_count INTEGER DEFAULT 0", "categories TEXT DEFAULT NULL",
-                    "notes TEXT DEFAULT NULL"]:
+                    "notes TEXT DEFAULT NULL", "updated_at TIMESTAMP DEFAULT NULL",
+                    "base_recipe TEXT DEFAULT NULL"]:
             try:
                 conn.execute(f"ALTER TABLE recipes ADD COLUMN {col}")
             except Exception:
@@ -703,8 +725,9 @@ def save_recipe():
     cur = db.execute(
         """INSERT INTO recipes
            (title, servings, servings_num, ingredients, instructions,
-            ingredient_groups, instruction_groups, image, total_time, site_name, source_url, category, categories)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            ingredient_groups, instruction_groups, image, total_time, site_name, source_url, category, categories,
+            base_recipe)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             data.get("title", "Untitled"),
             data.get("servings"),
@@ -719,6 +742,7 @@ def save_recipe():
             data.get("source_url"),
             category,
             json.dumps(cats) if cats else None,
+            data.get("base_recipe") or None,
         ),
     )
     db.commit()
@@ -745,7 +769,8 @@ def update_recipe(rid):
         """UPDATE recipes
            SET title=?, servings=?, servings_num=?, ingredients=?, instructions=?,
                ingredient_groups=?, instruction_groups=?, image=?, total_time=?, site_name=?,
-               category=?, categories=?, notes=?
+               source_url=?, category=?, categories=?, notes=?, base_recipe=?,
+               updated_at=CURRENT_TIMESTAMP
            WHERE id=?""",
         (
             data.get("title"),
@@ -758,9 +783,11 @@ def update_recipe(rid):
             data.get("image"),
             data.get("total_time"),
             data.get("site_name"),
+            data.get("source_url"),
             category,
             json.dumps(cats) if cats else None,
             data.get("notes") or None,
+            data.get("base_recipe") or None,
             rid,
         ),
     )
@@ -878,6 +905,39 @@ def delete_meal(mid):
     db.execute("DELETE FROM meals WHERE id=?", (mid,))
     db.commit()
     return jsonify({"ok": True})
+
+
+@app.route("/meals/<int:mid>/copy", methods=["POST"])
+def copy_meal(mid):
+    db = get_db()
+    original = db.execute("SELECT * FROM meals WHERE id=?", (mid,)).fetchone()
+    if not original:
+        return jsonify({"error": "Meal not found"}), 404
+    orig = dict(original)
+    cur = db.execute(
+        "INSERT INTO meals (name, category, categories, default_servings, notes) VALUES (?,?,?,?,?)",
+        (orig["name"] + " (copy)", orig.get("category"), orig.get("categories"),
+         orig.get("default_servings"), orig.get("notes"))
+    )
+    new_id = cur.lastrowid
+    # Copy all recipe associations
+    recipes = db.execute("SELECT * FROM meal_recipes WHERE meal_id=?", (mid,)).fetchall()
+    for r in recipes:
+        db.execute(
+            "INSERT INTO meal_recipes (meal_id, recipe_id, sort_order, servings) VALUES (?,?,?,?)",
+            (new_id, r["recipe_id"], r["sort_order"], r["servings"])
+        )
+    db.commit()
+    # Return the new meal
+    meal_row = db.execute("SELECT * FROM meals WHERE id=?", (new_id,)).fetchone()
+    meal_dict = dict(meal_row)
+    meal_dict["categories"] = _parse_categories(meal_dict)
+    meal_dict["recipes"] = [dict(r) for r in db.execute(
+        """SELECT r.id, r.title, r.servings, r.servings_num, r.image, mr.servings AS recipe_servings
+           FROM meal_recipes mr JOIN recipes r ON r.id = mr.recipe_id
+           WHERE mr.meal_id = ? ORDER BY mr.sort_order""", (new_id,)
+    ).fetchall()]
+    return jsonify(meal_dict), 201
 
 
 @app.route("/meals/<int:mid>/recipes", methods=["POST"])
@@ -1001,6 +1061,21 @@ def patch_group_meal_member(gid, slot_id):
 def remove_meal_from_group(gid, slot_id):
     db = get_db()
     db.execute("DELETE FROM group_meal_members WHERE row_id=? AND group_id=?", (slot_id, gid))
+    db.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/group-meals/<int:gid>/slots/reorder", methods=["PATCH"])
+def reorder_group_meal_slots(gid):
+    """Accepts {"order": [slot_id1, slot_id2, ...]} and updates sort_order."""
+    data = request.get_json()
+    order = data.get("order", [])
+    db = get_db()
+    for i, slot_id in enumerate(order):
+        db.execute(
+            "UPDATE group_meal_members SET sort_order=? WHERE row_id=? AND group_id=?",
+            (i, slot_id, gid)
+        )
     db.commit()
     return jsonify({"ok": True})
 
@@ -1311,6 +1386,64 @@ def delete_cookbook():
     import gc
     gc.collect()
     os.remove(path)
+    return jsonify({"ok": True})
+
+
+# ── Backup ────────────────────────────────────────────────────────────────────
+
+@app.route("/backup/list", methods=["GET"])
+def list_backups():
+    backup_dir = os.path.join(DATA_DIR, "backups")
+    os.makedirs(backup_dir, exist_ok=True)
+    files = []
+    for fname in sorted(os.listdir(backup_dir), reverse=True):
+        if fname.endswith(".cookbook"):
+            path = os.path.join(backup_dir, fname)
+            files.append({
+                "filename": fname,
+                "path": path,
+                "size": os.path.getsize(path),
+                "modified": os.path.getmtime(path),
+            })
+    return jsonify(files[:30])  # Return last 30 backups
+
+
+@app.route("/backup/create", methods=["POST"])
+def create_backup():
+    import shutil, datetime
+    backup_dir = os.path.join(DATA_DIR, "backups")
+    os.makedirs(backup_dir, exist_ok=True)
+    ts = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    cb_name = os.path.splitext(os.path.basename(active_db_path()))[0]
+    backup_name = f"{cb_name}_{ts}.cookbook"
+    backup_path = os.path.join(backup_dir, backup_name)
+    shutil.copy2(active_db_path(), backup_path)
+    # Clean up old backups - keep last 30
+    all_backups = sorted([
+        os.path.join(backup_dir, f) for f in os.listdir(backup_dir)
+        if f.endswith(".cookbook")
+    ], key=os.path.getmtime)
+    for old in all_backups[:-30]:
+        try: os.remove(old)
+        except OSError: pass
+    return jsonify({"ok": True, "path": backup_path, "filename": backup_name})
+
+
+@app.route("/backup/restore", methods=["POST"])
+def restore_backup():
+    import shutil
+    data = request.get_json()
+    backup_path = data.get("path", "")
+    if not backup_path or not os.path.exists(backup_path):
+        return jsonify({"error": "Backup file not found"}), 404
+    # Validate it's a valid SQLite cookbook
+    try:
+        conn = sqlite3.connect(backup_path)
+        conn.execute("SELECT COUNT(*) FROM recipes")
+        conn.close()
+    except Exception:
+        return jsonify({"error": "Invalid backup file"}), 400
+    shutil.copy2(backup_path, active_db_path())
     return jsonify({"ok": True})
 
 
