@@ -696,9 +696,80 @@ def import_recipes_peek():
             pass
 
 
+def _parse_macleay_pdf_page(page_text: str) -> str:
+    """Parse one page of text extracted from a Macleay Recipe Manager printed PDF.
+    Returns the page reformatted as a .txt-style recipe block that the text importer
+    understands (Title / Servings: / Ingredients: / Instructions: sections).
+    """
+    import re
+    lines = [l.strip() for l in page_text.split('\n') if l.strip()]
+    if not lines:
+        return ""
+
+    title = lines[0]
+    servings = ""
+    note = ""
+    ingredients = []
+    instruction_lines = []
+    i = 1
+
+    # Scan header area for Yield:/Note:/source lines
+    while i < len(lines):
+        line = lines[i]
+        if line.lower().startswith("yield:"):
+            servings = line[len("yield:"):].strip()
+            i += 1
+        elif line.lower().startswith("note:"):
+            note = line[len("note:"):].strip()
+            i += 1
+        elif i == 1 and len(line) < 60 and not re.match(r'^\d', line):
+            # Likely the site/source name — skip silently (we don't import source)
+            i += 1
+        else:
+            break
+
+    # Remaining lines: ingredients are short; directions are long prose
+    # The directions are printed as one big joined paragraph, so they'll typically
+    # appear as one or a few long lines at the end.
+    remaining = lines[i:]
+
+    # Walk from the end: collect long prose lines as directions,
+    # then everything else is ingredients.
+    cutoff = len(remaining)
+    for j in range(len(remaining) - 1, -1, -1):
+        ln = remaining[j]
+        # A "direction" line: very long, or ends with a period/question mark
+        if len(ln) > 70 or (len(ln) > 30 and re.search(r'[.!?]$', ln)):
+            cutoff = j
+        else:
+            break  # stop as soon as we hit a short line from the bottom
+
+    ingredients = remaining[:cutoff]
+    direction_text = " ".join(remaining[cutoff:]).strip()
+
+    # Build output in .txt import format
+    out = title + "\n"
+    if servings:
+        out += f"Servings: {servings}\n"
+    if note:
+        out += f"Note: {note}\n"
+    out += "\nIngredients:\n"
+    for ing in ingredients:
+        out += ing + "\n"
+    out += "\nInstructions:\n"
+    if direction_text:
+        # Split on sentence boundaries for multi-step readability
+        steps = re.split(r'(?<=[\.\!\?])\s+(?=[A-Z\d])', direction_text)
+        for step in steps:
+            if step.strip():
+                out += step.strip() + "\n"
+    return out.strip()
+
+
 @app.route("/recipes/import-pdf", methods=["POST"])
 def import_pdf_text():
-    """Upload a PDF and extract its text, returning it for the client-side text parser."""
+    """Upload a PDF printed from Macleay Recipe Manager, parse each page as a recipe,
+    and return the combined text in .txt import format."""
     import tempfile
     f = request.files.get("file")
     if not f:
@@ -712,19 +783,22 @@ def import_pdf_text():
         try:
             import pypdf
             reader = pypdf.PdfReader(tmp.name)
-            pages_text = []
+            recipe_blocks = []
             for page in reader.pages:
                 t = page.extract_text()
-                if t:
-                    pages_text.append(t.strip())
-            text = "\n".join(pages_text).strip()
+                if t and t.strip():
+                    parsed = _parse_macleay_pdf_page(t.strip())
+                    if parsed:
+                        recipe_blocks.append(parsed)
         except ImportError:
             return jsonify({"error": "pypdf not installed — PDF import not available"}), 500
         except Exception as e:
             return jsonify({"error": f"Could not read PDF: {e}"}), 400
-        if not text:
+        if not recipe_blocks:
             return jsonify({"error": "No text found in this PDF. It may be a scanned image."}), 400
-        return jsonify({"text": text})
+        # Join multiple recipes with a clear separator that the text importer recognises
+        combined = "\n\n---\n\n".join(recipe_blocks)
+        return jsonify({"text": combined})
     finally:
         try:
             os.unlink(tmp.name)

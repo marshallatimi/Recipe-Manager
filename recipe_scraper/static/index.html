@@ -907,7 +907,7 @@
 
 <!-- Help / About Modal -->
 <div id="help-modal-backdrop" class="img-modal-backdrop" hidden onclick="closeHelpPanel(event)">
-  <div class="img-modal" style="width:min(680px,96vw);max-height:92vh;display:flex;flex-direction:column" onclick="event.stopPropagation()">
+  <div class="img-modal" style="width:min(680px,96vw);height:min(92vh,700px);display:flex;flex-direction:column" onclick="event.stopPropagation()">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.9rem;flex-shrink:0">
       <div style="display:flex;align-items:center;gap:0.6rem">
         <span style="font-size:1.4rem">❓</span>
@@ -3011,20 +3011,20 @@ const HELP_CONTENT = {
     <p>This is your recipe library — every recipe you've saved lives here, organized the way you want.</p>
     <h4>Browsing &amp; Searching</h4>
     <ul>
-      <li>Use the <strong>Search bar</strong> (left side) to filter by title, category, servings, or source site as you type</li>
+      <li>Use the <strong>Search bar</strong> to filter recipes as you type</li>
       <li>Use the <strong>Sort</strong> dropdown to order by Newest, Oldest, A→Z, Z→A, By Category, or Most Used</li>
-      <li>Use the <strong>Category filter</strong> to show only recipes in a specific category</li>
+      <li>Use the <strong>Category filter</strong> dropdown to filter by one or more categories at once — click multiple to combine them, and use <strong>Clear all</strong> at the top of the list to reset</li>
+      <li>Switch between <strong>Grid</strong> and <strong>List</strong> view in Settings</li>
     </ul>
     <h4>Recipe Cards</h4>
     <ul>
       <li>Click a card to open and edit the recipe</li>
-      <li>Hover a card to reveal the <strong>✕ delete</strong> button in the top-right corner</li>
-      <li>All category badges are shown on each card</li>
+      <li>Hover a card to reveal the <strong>✕ delete</strong> button</li>
     </ul>
     <h4>Adding Recipes</h4>
     <ul>
       <li><strong>+ Create</strong> — manually type in a new recipe</li>
-      <li><strong>📥 Import</strong> — load recipes from a text file, cookbook file, or CSV</li>
+      <li><strong>📥 Import</strong> — load from a text file, cookbook file, CSV, or a printed PDF from this app</li>
       <li>Or use the <strong>Scrape Recipe</strong> tab to grab one from a website</li>
     </ul>`,
 
@@ -3043,6 +3043,7 @@ const HELP_CONTENT = {
       <li>Use <strong>+ Add item</strong> at the bottom of a section to add a new line</li>
       <li>Use <strong>+ Add section</strong> to create a named sub-group (e.g. "For the sauce")</li>
       <li>Click the section header to rename it</li>
+      <li>Drag the <strong>⠿</strong> handle on any ingredient, step, or section header to reorder them</li>
       <li>The small <strong>✕</strong> button on each line deletes that item</li>
     </ul>
     <h4>Serving Scaler</h4>
@@ -3067,7 +3068,7 @@ const HELP_CONTENT = {
     <h4>After creating</h4>
     <ul>
       <li>The recipe opens immediately so you can keep editing it inline</li>
-      <li>You can add ingredient/instruction sections, upload a photo, and more from the detail view</li>
+      <li>You can add ingredient/instruction sections, upload a photo, drag rows to reorder, and more</li>
     </ul>
     <div class="help-tip">💡 You can also import a plain <strong>.txt file</strong> with a recipe — label sections <em>Ingredients:</em> and <em>Instructions:</em> and the app will parse them automatically.</div>`,
 
@@ -3085,48 +3086,46 @@ const HELP_CONTENT = {
     </ul>
     <h4>Filtering by category</h4>
     <ul>
-      <li>In My Recipes, use the <strong>Category</strong> dropdown to show only recipes that match</li>
-      <li>The filter works across all categories — a recipe shows if <em>any</em> of its categories match</li>
-    </ul>
-    <h4>When creating a recipe</h4>
-    <ul>
-      <li>Type categories comma-separated in the Categories field: <em>Dinner, Italian, Quick Meals</em></li>
+      <li>In My Recipes, Meals, and Group Meals tabs — use the <strong>Category</strong> dropdown to filter by one or more categories at once</li>
+      <li>A <strong>Clear all</strong> option appears at the top of the dropdown to reset filters quickly</li>
     </ul>
     <div class="help-tip">💡 Categories are shared across recipes automatically — your existing ones appear as suggestions whenever you add a new category.</div>`,
 
   cookbooks: `<h3>📚 Cookbooks</h3>
-    <p>A <strong>cookbook</strong> is a self-contained collection of recipes stored as a <em>.cookbook</em> file. You can have as many as you want — one for family recipes, one for work lunches, one per cuisine, etc.</p>
+    <p>A <strong>cookbook</strong> is a self-contained collection of recipes stored as a <em>.cookbook</em> file. You can have as many as you want.</p>
     <h4>Managing cookbooks</h4>
     <ul>
       <li>Go to the <strong>📚 Cookbooks</strong> tab to see all your cookbooks</li>
       <li>Click a cookbook card to <strong>switch</strong> to it — all tabs immediately show that cookbook's recipes</li>
-      <li>Click the <strong>✏️ rename</strong> icon to rename a cookbook</li>
-      <li>Click the <strong>🗑️ delete</strong> icon to delete it — you must always keep at least one cookbook</li>
+      <li>Click the <strong>✏️</strong> rename icon to rename a cookbook</li>
+      <li>Click the <strong>🗑️</strong> delete icon to delete it</li>
+    </ul>
+    <h4>Linked (external) cookbooks</h4>
+    <ul>
+      <li>Use <strong>🔗 Link External Cookbook</strong> to link a <em>.cookbook</em> file that lives in a different folder — such as a shared drive or cloud folder (OneDrive, Google Drive, etc.)</li>
+      <li>Linked cookbooks show a <strong>🔗 Linked</strong> badge and display their file path</li>
+      <li>The file stays in its original location — it is not copied. Any computer with access to that path can link the same file</li>
+      <li>Use <strong>🔗✕</strong> to remove the link (does not delete the file)</li>
     </ul>
     <h4>Creating &amp; importing</h4>
     <ul>
       <li><strong>New Cookbook</strong> (File menu or Cookbooks tab) — creates a fresh empty cookbook</li>
-      <li><strong>Import Cookbook</strong> (Cookbooks tab) — import a <em>.cookbook</em> file or an AccuChef CSV as a new cookbook</li>
+      <li><strong>Import Cookbook</strong> (Cookbooks tab) — import a <em>.cookbook</em> or AccuChef <em>.csv</em> as a new cookbook</li>
     </ul>
     <h4>Exporting</h4>
     <ul>
-      <li>Click the <strong>📤 export</strong> icon on a cookbook card to save it as a CSV file</li>
-      <li>The exported CSV preserves everything — photos, links, categories, ingredient groups — and can be imported back perfectly</li>
+      <li>Click the <strong>📤</strong> icon on any cookbook card to save it as a Macleay CSV file</li>
     </ul>
-    <div class="help-tip">💡 Cookbook files are stored in a <em>cookbooks/</em> folder. Use <strong>File → Open Cookbooks Folder</strong> to see them in your file explorer.</div>`,
+    <div class="help-tip">💡 To share a cookbook across multiple computers, put the .cookbook file in a cloud-synced folder (e.g. OneDrive) and use <strong>Link External Cookbook</strong> on each computer.</div>`,
 
   importexp: `<h3>📥 Import &amp; Export</h3>
     <h4>Importing recipes into the current cookbook</h4>
-    <p>Click <strong>📥 Import</strong> on the My Recipes page. Supports three file types:</p>
+    <p>Click <strong>📥 Import</strong> on the My Recipes page. Supports four file types:</p>
     <ul>
       <li><strong>.txt — Text file</strong>: A single recipe. First line = title. Label sections <em>Ingredients:</em> and <em>Instructions:</em>, one item per line. Optional lines: <em>Servings:</em>, <em>Category:</em>, <em>Time:</em>, <em>Source:</em></li>
+      <li><strong>.pdf — Printed recipe PDF</strong>: A PDF that was printed or exported from Macleay Recipe Manager. The app will extract the text and import the recipe automatically</li>
       <li><strong>.cookbook — Cookbook file</strong>: Every recipe inside gets added to your current cookbook</li>
-      <li><strong>.csv — Spreadsheet</strong>: Two formats are supported —
-        <ul>
-          <li><em>Macleay Recipe Manager CSV</em> (exported from this app) — full fidelity, preserves photos, categories, all fields</li>
-          <li><em>AccuChef CSV</em> — imports title, category, servings, ingredients, and instructions</li>
-        </ul>
-      </li>
+      <li><strong>.csv — Spreadsheet</strong>: Supports Macleay Recipe Manager CSV (full fidelity) and AccuChef CSV</li>
     </ul>
     <h4>Importing as a new cookbook</h4>
     <ul>
@@ -3145,97 +3144,101 @@ const HELP_CONTENT = {
     <h4>Creating a meal</h4>
     <ul>
       <li>Go to the <strong>Meals</strong> tab and click <strong>+ New Meal</strong></li>
-      <li>Give it a name (e.g. "Sunday Roast") and click the card to open it</li>
+      <li>Give it a name and click the card to open it</li>
+    </ul>
+    <h4>Browsing meals</h4>
+    <ul>
+      <li>Use the <strong>Search</strong> bar and <strong>Category</strong> dropdown to filter the meal list</li>
     </ul>
     <h4>Adding recipes to a meal</h4>
     <ul>
-      <li>Open a meal — use the <strong>Add Recipe</strong> search at the bottom to find recipes from your cookbook</li>
-      <li>Click a recipe card to add it; click <strong>✕</strong> next to a recipe in the list to remove it</li>
+      <li>Open a meal — use the <strong>Add Recipe</strong> search to find recipes from your cookbook</li>
+      <li>Click a recipe card to add it; click <strong>✕</strong> to remove it</li>
     </ul>
     <h4>Printing &amp; saving a meal</h4>
     <ul>
-      <li>Click <strong>🖨 Print All Recipes</strong> to print every recipe in the meal with page breaks between them</li>
-      <li>Click <strong>💾 Save Recipes PDF</strong> to export all the meal's recipes directly to a PDF file</li>
+      <li>Click <strong>🖨 Print All Recipes</strong> to print every recipe in the meal</li>
+      <li>Click <strong>💾 Save Recipes PDF</strong> to export all recipes to a PDF file</li>
     </ul>
     <h4>Shopping from a meal</h4>
     <ul>
-      <li>Go to the <strong>Shopping List</strong> tab and search for your meal — add it all at once</li>
-      <li>Or use the <strong>Group Meal</strong> tab to combine multiple meals into one shopping list</li>
+      <li>Go to the <strong>Shopping List</strong> tab and search for your meal to add it all at once</li>
     </ul>`,
 
   groupmeal: `<h3>🍴 Group Meal</h3>
-    <p>A <strong>Group Meal</strong> combines any number of saved meals so you can print all their recipes and a merged shopping list in one go. Groups are saved and editable just like meals.</p>
+    <p>A <strong>Group Meal</strong> combines any number of saved meals so you can print all their recipes and a merged shopping list in one go.</p>
     <h4>Creating a group meal</h4>
     <ul>
       <li>Go to the <strong>🍽️ Group Meal</strong> tab and click <strong>+ New Group Meal</strong></li>
-      <li>Give it a name (e.g. "Christmas Dinner") and the detail view opens</li>
+      <li>Give it a name and the detail view opens</li>
     </ul>
     <h4>Adding &amp; removing meals</h4>
     <ul>
       <li>Search for a meal in the <strong>Add Meal</strong> search box — click a result to add it</li>
-      <li>Click <strong>✕</strong> next to any meal in the list to remove it</li>
-      <li>Click the group name at the top to rename it</li>
+      <li>Click <strong>✕</strong> next to any meal to remove it</li>
     </ul>
     <h4>Printing &amp; exporting</h4>
     <ul>
-      <li><strong>🖨 Print Recipes</strong> — prints all recipes from every meal (one per page, same clean format as single-recipe print)</li>
+      <li><strong>🖨 Print Recipes</strong> — prints all recipes from every meal, including duplicates (if the same recipe is in two meals, it prints twice)</li>
       <li><strong>💾 Recipes PDF</strong> — saves all recipes to a PDF file</li>
-      <li><strong>🛒 Print List</strong> — prints a merged, alphabetically-sorted shopping list of all meals' ingredients</li>
+      <li><strong>🛒 Print List</strong> — prints a merged, categorized shopping list of all meals' ingredients</li>
       <li><strong>💾 Shopping PDF</strong> — saves the merged shopping list to a PDF file</li>
     </ul>
-    <h4>Notes</h4>
+    <h4>Serving sizes</h4>
     <ul>
-      <li>Duplicate recipes shared by multiple meals are only printed once</li>
-      <li>Groups are saved permanently — they persist across app restarts</li>
-      <li>Groups are per-cookbook — switching cookbooks shows that cookbook's groups</li>
+      <li>Set a <strong>default serving size</strong> for the whole group, or override per-meal or per-recipe</li>
+      <li>Setting a recipe or meal to <strong>0 servings</strong> removes it from all printing and shopping</li>
     </ul>
-    <div class="help-tip">💡 Great for batch cooking, dinner party planning, or weekly meal prep — one group, one shopping list, one PDF.</div>`,
+    <div class="help-tip">💡 Groups are saved permanently and are per-cookbook — switching cookbooks shows that cookbook's groups.</div>`,
 
   shopping: `<h3>🛒 Shopping List</h3>
     <p>The Shopping List automatically combines ingredients from one or more recipes or meals — scaling quantities to your desired servings.</p>
     <h4>Adding to the list</h4>
     <ul>
-      <li>Go to the <strong>Shopping List</strong> tab</li>
-      <li>Search for a recipe or meal by name</li>
+      <li>Go to the <strong>Shopping List</strong> tab — search for a recipe or meal</li>
       <li>Set the <strong>servings</strong> you want, then click <strong>Add to List</strong></li>
       <li>Ingredients are merged — if two recipes both need flour, the amounts are combined</li>
     </ul>
-    <h4>Managing the list</h4>
+    <h4>Views</h4>
     <ul>
-      <li>Check off items as you shop — they grey out to show they're done</li>
-      <li>Click <strong>✕</strong> to remove an individual item</li>
-      <li>Click <strong>Clear All</strong> to start fresh (a confirmation dialog will appear)</li>
+      <li><strong>By Recipe</strong> — see ingredients grouped by recipe</li>
+      <li><strong>By Category</strong> — see all ingredients sorted alphabetically within shopping categories (Produce, Dairy, Meat, etc.) with ingredient name shown first</li>
+    </ul>
+    <h4>Shopping categories</h4>
+    <ul>
+      <li>Click <strong>⚙ Categories</strong> to assign ingredients to specific shopping categories</li>
+      <li>New ingredients are auto-assigned a category based on their name</li>
     </ul>
     <h4>Printing &amp; saving</h4>
     <ul>
-      <li>Click <strong>🖨 Print List</strong> to print a clean, formatted shopping list</li>
-      <li>Click <strong>💾 Save PDF</strong> to export the shopping list directly to a PDF file</li>
+      <li>Click <strong>🖨 Print List</strong> to print a clean, categorized shopping list (ingredient name first, then amount)</li>
+      <li>Click <strong>💾 Save PDF</strong> to export the shopping list to a PDF file</li>
     </ul>
-    <div class="help-tip">💡 To combine multiple meals into one shopping list without adding them individually, use the <strong>Group Meal</strong> tab instead.</div>`,
+    <div class="help-tip">💡 To combine multiple meals into one shopping list, use the <strong>Group Meal</strong> tab instead.</div>`,
 
   print: `<h3>🖨️ Printing &amp; PDF Export</h3>
     <h4>Print / Save PDF — single recipe</h4>
     <ul>
       <li>Open a recipe and click <strong>🖨 Print</strong> to open the system print dialog</li>
-      <li>Click <strong>💾 Save PDF</strong> to export the recipe directly to a PDF file (choose where to save it)</li>
-      <li>If you've scaled the servings, the scaled amounts are used</li>
-      <li>The output is clean — no buttons, no sidebar, just the recipe in a two-column ingredient layout</li>
+      <li>Click <strong>💾 Save PDF</strong> to export the recipe directly to a PDF file</li>
+      <li>The output is clean — no buttons, no sidebar, just the recipe</li>
+    </ul>
+    <h4>Removing date, URL, and page number from prints</h4>
+    <ul>
+      <li><strong>PDF export</strong> (💾 Save PDF) never includes those — they are automatically suppressed</li>
+      <li><strong>Print dialog</strong> (🖨 Print): uncheck <em>Headers and footers</em> in the print dialog — Edge and Chrome remember this setting permanently after you do it once</li>
     </ul>
     <h4>Print / Save PDF — a meal's recipes</h4>
     <ul>
       <li>Open a meal and click <strong>🖨 Print All Recipes</strong> or <strong>💾 Save Recipes PDF</strong></li>
-      <li>Every recipe in the meal is included, one per page, using the same clean format</li>
-    </ul>
-    <h4>Print / Save PDF — shopping list</h4>
-    <ul>
-      <li>Go to the Shopping List tab and click <strong>🖨 Print List</strong> or <strong>💾 Save PDF</strong></li>
+      <li>Every recipe in the meal is included, one per page</li>
     </ul>
     <h4>Group Meal — print or save everything at once</h4>
     <ul>
       <li>Use the <strong>Group Meal</strong> tab to combine multiple meals</li>
-      <li>Print or save all recipes and a merged shopping list in one click</li>
+      <li>Print or save all recipes (including duplicates across meals) and a merged shopping list in one click</li>
     </ul>
-    <div class="help-tip">💡 PDF files are saved using Microsoft Edge's built-in PDF engine — no extra software needed. Make sure Edge is installed (it comes with Windows 10/11).</div>`,
+    <div class="help-tip">💡 PDF export works entirely offline using a built-in PDF engine — no browser or extra software required.</div>`,
 
   settings: `<h3>⚙️ Settings</h3>
     <p>Access settings via the <strong>⚙ Settings</strong> button in the top menu bar.</p>
@@ -3243,13 +3246,14 @@ const HELP_CONTENT = {
     <ul>
       <li><strong>Dark Mode</strong> — toggle between light and dark themes</li>
       <li><strong>Font Size</strong> — enter a size from 10–28px; all text scales proportionally</li>
-      <li><strong>Accent Color</strong> — change the red/primary colour used throughout the app. Choose from presets or use the colour picker for any colour</li>
+      <li><strong>Accent Color</strong> — change the red/primary colour used throughout the app</li>
       <li><strong>Text Color</strong> — change the main text colour (light mode only)</li>
+      <li><strong>View Mode</strong> — switch between <em>Grid</em> (cards) and <em>List</em> view. Applies to My Recipes, Meals, Group Meals, Cookbooks, and the Shopping List recipe browser</li>
     </ul>
     <h4>File</h4>
     <ul>
-      <li><strong>File → Open Cookbooks Folder</strong> — opens the folder where all your cookbook files are stored in your file explorer</li>
-      <li><strong>File → Cookbook File Location</strong> — shows the full path of the currently active cookbook file</li>
+      <li><strong>File → Open Cookbooks Folder</strong> — opens the folder where cookbook files are stored</li>
+      <li><strong>File → Cookbook File Location</strong> — shows the full path of the active cookbook</li>
     </ul>
     <div class="help-tip">💡 All settings are saved automatically and restored next time you open the app.</div>`,
 
@@ -3257,7 +3261,7 @@ const HELP_CONTENT = {
     <div style="text-align:center;padding:1rem 0">
       <div style="font-size:2.5rem;margin-bottom:0.4rem">🍴</div>
       <div style="font-size:1.1rem;font-weight:800;margin-bottom:0.2rem">Macleay Recipe Manager</div>
-      <div style="font-size:0.85rem;color:var(--muted)">Version 1.0 &nbsp;·&nbsp; Built with Flask &amp; pywebview</div>
+      <div style="font-size:0.85rem;color:var(--muted)">Version v1.2.9 &nbsp;·&nbsp; Built with Flask &amp; pywebview</div>
     </div>
     <h4>What it is</h4>
     <p>A fully offline desktop recipe management app. All your data is stored locally in <em>.cookbook</em> files — nothing is sent to the cloud.</p>
@@ -3265,19 +3269,20 @@ const HELP_CONTENT = {
     <ul>
       <li>Scrape recipes from hundreds of websites automatically</li>
       <li>Organize recipes into cookbooks and categories</li>
-      <li>Plan meals and combine them into group meals</li>
-      <li>Generate shopping lists with automatic ingredient merging</li>
-      <li>Print or export any recipe, meal, or shopping list to PDF</li>
+      <li>Link external cookbooks from shared/cloud folders</li>
+      <li>Plan meals and combine them into group meals with per-recipe serving sizes</li>
+      <li>Generate shopping lists with automatic ingredient merging and category sorting</li>
+      <li>Print or export any recipe, meal, or shopping list to PDF (no browser required)</li>
+      <li>Import recipes from text files, CSV, other cookbooks, or printed PDFs</li>
+      <li>Drag-and-drop reordering of ingredients, steps, and sections in the editor</li>
     </ul>
     <h4>Built with</h4>
     <ul>
       <li><strong>Flask</strong> — Python web framework (backend)</li>
       <li><strong>pywebview</strong> — wraps the app in a native desktop window</li>
-      <li><strong>recipe-scrapers</strong> — parses recipe data from hundreds of websites</li>
-      <li><strong>SQLite</strong> — local database engine for each cookbook file</li>
-    </ul>
-    <h4>Data &amp; Privacy</h4>
-    <p>All recipes, photos, and settings are stored entirely on your computer. No account, no internet connection needed (except when scraping a new recipe URL).</p>`,
+      <li><strong>xhtml2pdf/pisa</strong> — built-in PDF engine (no browser needed)</li>
+      <li><strong>SQLite</strong> — local database for each cookbook file</li>
+    </ul>`,
 };
 
 let _helpActiveTopic = "scrape";
@@ -3415,7 +3420,28 @@ function renderCookbooksGrid() {
     grid.innerHTML = `<div class="empty-state"><div class="big-icon">📚</div><p>No cookbooks yet.</p></div>`;
     return;
   }
+  const cbMode = appSettings.viewMode || "grid";
+  if (cbMode === "list") {
+    grid.className = "list-view";
+    grid.innerHTML = savedCookbooks.map((cb, i) => {
+      const linked = cb.linked;
+      const del = linked
+        ? `<button class="list-del" title="Remove link" onclick="event.stopPropagation();unlinkCookbook(${i})">🔗✕</button>`
+        : `<button class="list-del" title="Delete" onclick="event.stopPropagation();deleteCookbook(${i})">✕</button>`;
+      const badge = cb.isActive ? `<span class="cb-badge-active" style="font-size:0.72rem;margin-left:0.3rem">✓ Active</span>` : "";
+      return `<div class="list-card${cb.isActive ? " active-cookbook" : ""}" onclick="switchCookbook(${i})">
+        <div class="list-thumb-ph">${linked ? "🔗" : "📖"}</div>
+        <div class="list-info">
+          <div class="list-title">${esc(cb.name)}${badge}</div>
+          <div class="list-meta">${cb.recipeCount} recipe${cb.recipeCount !== 1 ? "s" : ""}${cb.linked ? " · Linked" : ""}</div>
+        </div>
+        ${del}
+      </div>`;
+    }).join("");
+    return;
+  }
   // Use indices in onclick to avoid JSON quote-in-attribute issues
+  grid.className = "recipe-grid";
   grid.innerHTML = savedCookbooks.map((cb, i) => {
     const exportBtn   = `<button class="cb-action-btn" title="Export as CSV" onclick="exportCookbook(${i})">📤</button>`;
     const linked      = cb.linked;
@@ -4105,6 +4131,22 @@ function renderShopBrowser() {
     return;
   }
 
+  const shopBrowserMode = appSettings.viewMode || "grid";
+  if (shopBrowserMode === "list") {
+    browser.className = "list-view";
+    browser.innerHTML = items.map(item => {
+      const badge = item.type === "meal" ? `<span class="meal-badge">MEAL</span> ` : "";
+      return `<div class="list-card" onclick="openShopAddModal('${item.type}',${item.id})">
+        ${item.image ? `<img class="list-thumb" src="${esc(item.image)}" loading="lazy"/>` : `<div class="list-thumb-ph">${item.type==="meal"?"🍽️":"🥘"}</div>`}
+        <div class="list-info">
+          <div class="list-title">${esc(item.title)}</div>
+          <div class="list-meta">${badge}${esc(item.meta)}</div>
+        </div>
+      </div>`;
+    }).join("");
+    return;
+  }
+  browser.className = "";
   browser.innerHTML = items.map(item => {
     const thumbHtml = item.image
       ? `<img src="${esc(item.image)}" alt="${esc(item.title)}" style="width:100%;height:90px;object-fit:cover;display:block"/>`
@@ -4393,7 +4435,7 @@ function renderShoppingList() {
     const catHtml = Object.entries(categorized).filter(([,v]) => v.length).map(([cat, ings]) => `
       <div style="margin-bottom:1rem">
         <div style="font-weight:700;font-size:0.82rem;text-transform:uppercase;letter-spacing:0.6px;color:var(--red);margin-bottom:0.4rem">${esc(cat)}</div>
-        ${ings.map(i => `<div style="font-size:0.88rem;padding:0.15rem 0">___ ${esc(i)}</div>`).join("")}
+        ${[...ings].sort((a,b)=>ingNameKey(parseIngForCombine(a).name||a).localeCompare(ingNameKey(parseIngForCombine(b).name||b))).map(i => `<div style="font-size:0.88rem;padding:0.15rem 0">___ ${esc(formatIngNameFirst(i))}</div>`).join("")}
       </div>`).join("");
     content.innerHTML = `<div style="margin-bottom:0.5rem;font-size:0.82rem;color:var(--muted)">📦 Viewing by category. <button onclick="_shopCategoryView=false;renderShoppingList()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:0.82rem;padding:0">Back to list view</button></div>${catHtml}<p class="shop-summary">${totalItems} total ingredient${totalItems===1?"":"s"} across ${shoppingList.length} recipe${shoppingList.length===1?"":"s"}</p>`;
     return;
@@ -4557,6 +4599,16 @@ function buildMealRecipesHtml(recipes, factors) {
 <title>Recipes</title><style>${PRINT_CSS}</style></head><body>${blocks}</body></html>`;
 }
 
+function formatIngNameFirst(text) {
+  const NP = '(?:(?:\\d+\\s+)?\\d+\\/\\d+|\\d+(?:\\.\\d+)?)';
+  const UL = 'tsps?|teaspoons?|tbsps?|tbls?|tablespoons?|fl\\.?\\s*ozs?|cups?|pints?|pts?|quarts?|qts?|gallons?|gals?|ozs?|ounces?|lbs?|pounds?|kgs?|kilograms?|grams?|g(?=\\b)|mls?|l(?=\\b)';
+  const m = text.match(new RegExp(`^(${NP})(?:\\s*(${UL}))?\\s+(.+)$`, 'i'));
+  if (!m) return text;
+  const qty = m[1], unit = (m[2] || "").trim(), rest = (m[3] || "").trim();
+  const amount = unit ? `${qty} ${unit}` : qty;
+  return `${rest} — ${amount}`;
+}
+
 // Shared: build shopping list HTML from a list of shoppingList entries (with categories)
 function buildShoppingHtml(listEntries, title) {
   if (!listEntries || !listEntries.length) return null;
@@ -4570,7 +4622,7 @@ function buildShoppingHtml(listEntries, title) {
       const sorted = [...categorized[cat]].sort((a, b) => stripQty(a).localeCompare(stripQty(b)));
       return `<div class="cat-section">
   <div class="cat-header">${escP(cat)}</div>
-  ${sorted.map(i => `<div class="ing">___ ${escP(i)}</div>`).join("\n  ")}
+  ${sorted.map(i => `<div class="ing">___ ${escP(formatIngNameFirst(i))}</div>`).join("\n  ")}
 </div>`;
     }).join("\n");
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
@@ -5049,7 +5101,6 @@ async function deleteGroupMealById(gid) {
 function _groupAllRecipes() {
   const g = selectedGroupMeal;
   if (!g) return [];
-  const seen = new Set();
   const results = [];
   (g.meals||[]).forEach(gm => {
     const full = savedMeals.find(m => m.id === gm.id);
@@ -5060,18 +5111,15 @@ function _groupAllRecipes() {
                        : (g.default_servings != null ? g.default_servings : null);
     if (mealServings !== null && parseFloat(mealServings) === 0) return; // skip entire meal
     (full.recipes||[]).forEach(mr => {
-      if (!seen.has(mr.id)) {
-        seen.add(mr.id);
-        const r = savedRecipes.find(r => r.id === mr.id);
-        if (r) {
-          // Per-recipe override takes highest priority
-          const effectiveServings = rs[mr.id] != null ? rs[mr.id] : mealServings;
-          if (effectiveServings !== null && parseFloat(effectiveServings) === 0) return; // skip 0-serving recipes
-          const origNum = r.servings_num || parseServingsNumJS(r.servings) || null;
-          const factor = (effectiveServings && origNum && origNum > 0)
-                       ? effectiveServings / origNum : 1;
-          results.push({recipe: r, factor});
-        }
+      const r = savedRecipes.find(r => r.id === mr.id);
+      if (r) {
+        // Per-recipe override takes highest priority
+        const effectiveServings = rs[mr.id] != null ? rs[mr.id] : mealServings;
+        if (effectiveServings !== null && parseFloat(effectiveServings) === 0) return; // skip 0-serving recipes
+        const origNum = r.servings_num || parseServingsNumJS(r.servings) || null;
+        const factor = (effectiveServings && origNum && origNum > 0)
+                     ? effectiveServings / origNum : 1;
+        results.push({recipe: r, factor});
       }
     });
   });
