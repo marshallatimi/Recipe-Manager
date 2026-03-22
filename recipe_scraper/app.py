@@ -13,6 +13,7 @@ import mimetypes
 import uuid
 import threading
 import tempfile
+import time
 import urllib.request
 import ssl
 
@@ -47,14 +48,21 @@ SHOPPING_SETTINGS_PATH = os.path.join(DATA_DIR, "shopping_settings.json")
 def active_db_path():
     return _active_db["path"]
 
+# ── In-memory settings cache (invalidated on every write) ─────────────────────
+_settings_cache: dict = {"data": None}
+
 def load_settings():
+    if _settings_cache["data"] is not None:
+        return dict(_settings_cache["data"])
     try:
         with open(SETTINGS_PATH) as f:
-            return json.load(f)
+            _settings_cache["data"] = json.load(f)
+            return dict(_settings_cache["data"])
     except Exception:
         return {}
 
 def save_settings_to_file(data):
+    _settings_cache["data"] = dict(data)
     with open(SETTINGS_PATH, "w") as f:
         json.dump(data, f, indent=2)
 
@@ -69,8 +77,25 @@ def add_recent_file(path):
     save_settings_to_file(s)
 
 
+_cookbooks_cache: dict = {"data": None, "ts": 0.0}
+_COOKBOOKS_CACHE_TTL = 8  # seconds
+
+def _invalidate_cookbooks_cache():
+    _cookbooks_cache["data"] = None
+    _cookbooks_cache["ts"] = 0.0
+
 def get_cookbooks_list():
-    """Return all .cookbook files in COOKBOOKS_DIR plus any linked external ones."""
+    """Return all .cookbook files in COOKBOOKS_DIR plus any linked external ones.
+    Result is cached for _COOKBOOKS_CACHE_TTL seconds to avoid opening every file
+    on every request (especially costly for external cookbooks on network drives)."""
+    now = time.monotonic()
+    if _cookbooks_cache["data"] is not None and (now - _cookbooks_cache["ts"]) < _COOKBOOKS_CACHE_TTL:
+        # Update isActive flag in-place (active cookbook can change without full rebuild)
+        active = os.path.normpath(_active_db["path"])
+        for b in _cookbooks_cache["data"]:
+            b["isActive"] = os.path.normpath(b["path"]) == active
+        return list(_cookbooks_cache["data"])
+
     os.makedirs(COOKBOOKS_DIR, exist_ok=True)
     seen_paths = set()
     books = []
@@ -93,21 +118,22 @@ def get_cookbooks_list():
             "isDefault":   False,
             "isActive":    os.path.normpath(path) == os.path.normpath(_active_db["path"]),
             "recipeCount": count,
-            "linked":      linked,   # True = lives outside the local cookbooks folder
+            "linked":      linked,
         })
 
     for fname in sorted(os.listdir(COOKBOOKS_DIR)):
         if fname.endswith(".cookbook"):
             _add_book(os.path.join(COOKBOOKS_DIR, fname))
 
-    # Linked (external) cookbooks stored in settings
     s = load_settings()
     for lpath in s.get("linkedCookbooks", []):
         if os.path.exists(lpath):
             _add_book(lpath, linked=True)
 
     books.sort(key=lambda b: b["name"].lower())
-    return books
+    _cookbooks_cache["data"] = books
+    _cookbooks_cache["ts"]   = now
+    return list(books)
 
 
 def startup():
@@ -1033,18 +1059,28 @@ def delete_recipe(rid):
 def list_meals():
     db = get_db()
     meals = db.execute("SELECT * FROM meals ORDER BY created_at DESC").fetchall()
+    if not meals:
+        return jsonify([])
+    # Batch-fetch all meal_recipes in one query instead of N+1
+    meal_ids = [m["id"] for m in meals]
+    placeholders = ",".join("?" * len(meal_ids))
+    all_recipes = db.execute(
+        f"""SELECT mr.meal_id, r.id, r.title, r.servings, r.servings_num, r.image,
+                   mr.servings AS recipe_servings
+            FROM meal_recipes mr JOIN recipes r ON r.id = mr.recipe_id
+            WHERE mr.meal_id IN ({placeholders}) ORDER BY mr.meal_id, mr.sort_order""",
+        meal_ids,
+    ).fetchall()
+    recipes_by_meal: dict = {}
+    for r in all_recipes:
+        mid = r["meal_id"]
+        recipes_by_meal.setdefault(mid, []).append(dict(r))
     result = []
     for m in meals:
-        recipes = db.execute(
-            """SELECT r.id, r.title, r.servings, r.servings_num, r.image, mr.servings AS recipe_servings
-               FROM meal_recipes mr JOIN recipes r ON r.id = mr.recipe_id
-               WHERE mr.meal_id = ? ORDER BY mr.sort_order""",
-            (m["id"],)
-        ).fetchall()
         md = dict(m)
         md["categories"] = _parse_categories(md)
         md["category"]   = md["categories"][0] if md["categories"] else None
-        result.append({**md, "recipes": [dict(r) for r in recipes]})
+        result.append({**md, "recipes": recipes_by_meal.get(m["id"], [])})
     return jsonify(result)
 
 
@@ -1148,24 +1184,32 @@ def set_meal_recipe_servings(mid, rid):
 def list_group_meals():
     db = get_db()
     groups = db.execute("SELECT * FROM group_meals ORDER BY created_at DESC").fetchall()
+    if not groups:
+        return jsonify([])
+    # Batch-fetch all group_meal_members in one query instead of N+1
+    group_ids = [g["id"] for g in groups]
+    placeholders = ",".join("?" * len(group_ids))
+    all_members = db.execute(
+        f"""SELECT gm.group_id, gm.row_id AS slot_id, m.id, m.name,
+                   gm.servings, gm.recipe_servings
+            FROM group_meal_members gm
+            JOIN meals m ON m.id = gm.meal_id
+            WHERE gm.group_id IN ({placeholders})
+            ORDER BY gm.group_id, gm.sort_order, gm.row_id""",
+        group_ids,
+    ).fetchall()
+    members_by_group: dict = {}
+    for ml in all_members:
+        gid = ml["group_id"]
+        md  = dict(ml)
+        try:
+            md["recipe_servings"] = json.loads(md["recipe_servings"]) if md["recipe_servings"] else {}
+        except Exception:
+            md["recipe_servings"] = {}
+        members_by_group.setdefault(gid, []).append(md)
     result = []
     for g in groups:
-        meals = db.execute(
-            """SELECT gm.row_id AS slot_id, m.id, m.name, gm.servings, gm.recipe_servings
-               FROM group_meal_members gm
-               JOIN meals m ON m.id = gm.meal_id
-               WHERE gm.group_id = ? ORDER BY gm.sort_order, gm.row_id""",
-            (g["id"],)
-        ).fetchall()
-        meal_list = []
-        for ml in meals:
-            md = dict(ml)
-            try:
-                md["recipe_servings"] = json.loads(md["recipe_servings"]) if md["recipe_servings"] else {}
-            except Exception:
-                md["recipe_servings"] = {}
-            meal_list.append(md)
-        result.append({**dict(g), "meals": meal_list})
+        result.append({**dict(g), "meals": members_by_group.get(g["id"], [])})
     return jsonify(result)
 
 
@@ -1519,6 +1563,7 @@ def create_cookbook():
     s = load_settings()
     s["activeCookbook"] = path
     save_settings_to_file(s)
+    _invalidate_cookbooks_cache()
     return jsonify({"ok": True, "name": safe, "path": path}), 201
 
 
@@ -1560,6 +1605,7 @@ def rename_cookbook():
         s = load_settings()
         s["activeCookbook"] = new_path
         save_settings_to_file(s)
+    _invalidate_cookbooks_cache()
     return jsonify({"ok": True, "newName": safe_new, "newPath": new_path})
 
 
@@ -1596,6 +1642,7 @@ def delete_cookbook():
     import gc
     gc.collect()
     os.remove(path)
+    _invalidate_cookbooks_cache()
     return jsonify({"ok": True})
 
 
@@ -1631,6 +1678,7 @@ def link_cookbook():
         linked.append(lpath)
         s["linkedCookbooks"] = linked
         save_settings_to_file(s)
+    _invalidate_cookbooks_cache()
     return jsonify({"ok": True})
 
 
@@ -1645,6 +1693,7 @@ def unlink_cookbook():
               if os.path.normpath(p) != norm]
     s["linkedCookbooks"] = linked
     save_settings_to_file(s)
+    _invalidate_cookbooks_cache()
     return jsonify({"ok": True})
 
 
@@ -2097,6 +2146,7 @@ def import_cookbook():
                 count = c.execute("SELECT COUNT(*) FROM recipes").fetchone()[0]
         except Exception:
             count = 0
+        _invalidate_cookbooks_cache()
         return jsonify({"ok": True, "name": safe, "path": dest_path, "recipeCount": count})
     elif ext == ".csv":
         _csv_type, recipes = detect_and_parse_csv(src_path)
@@ -2129,6 +2179,7 @@ def import_cookbook():
             conn.commit()
         finally:
             conn.close()
+        _invalidate_cookbooks_cache()
         return jsonify({"ok": True, "name": safe, "path": dest_path,
                         "recipeCount": len(recipes)})
     else:

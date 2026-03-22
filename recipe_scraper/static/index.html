@@ -484,7 +484,7 @@
     <div class="grid-controls">
       <div class="grid-controls-left">
         <input class="grid-search-input" id="recipe-search-input" type="search"
-          placeholder="🔍 Search recipes…" oninput="applySort()" autocomplete="off">
+          placeholder="🔍 Search recipes…" oninput="_dApplySort()" autocomplete="off">
         <select id="ing-search-select" onchange="setIngSearchMode(this.value)" style="padding:0.3rem 0.55rem;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:0.82rem">
           <option value="title">🔍 By Title</option>
           <option value="ingredient">🧄 By Ingredient</option>
@@ -542,7 +542,7 @@
   <div class="shop-add-card">
     <div class="section-title">Add to Shopping List</div>
     <div class="shop-search-bar">
-      <input type="text" id="shop-search" placeholder="Search recipes and meals…" oninput="renderShopBrowser()"/>
+      <input type="text" id="shop-search" placeholder="Search recipes and meals…" oninput="_dRenderShopBrowser()"/>
       <select id="shop-sort-select" onchange="renderShopBrowser()">
         <option value="az">A → Z</option>
         <option value="za">Z → A</option>
@@ -562,7 +562,7 @@
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.6rem;margin-bottom:1rem">
       <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;flex:1">
         <input type="text" id="meal-search" placeholder="Search meals…"
-          oninput="renderMealGrid()"
+          oninput="_dRenderMealGrid()"
           style="padding:0.35rem 0.65rem;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:0.85rem;min-width:160px;flex:1;max-width:280px"/>
         <div id="meal-cat-filter-wrap" style="position:relative;display:inline-block">
           <button id="meal-cat-filter-btn" onclick="toggleMealCatFilter(event)"
@@ -593,7 +593,7 @@
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.6rem;margin-bottom:1rem">
       <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;flex:1">
         <input type="text" id="gm-list-search" placeholder="Search group meals…"
-          oninput="renderGroupMealGrid()"
+          oninput="_dRenderGroupMealGrid()"
           style="padding:0.35rem 0.65rem;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:0.85rem;min-width:160px;flex:1;max-width:280px"/>
         <div id="gm-cat-filter-wrap" style="position:relative;display:inline-block">
           <button id="gm-cat-filter-btn" onclick="toggleGmCatFilter(event)"
@@ -938,7 +938,7 @@
     </div>
     <div style="display:flex;gap:0.5rem;margin-bottom:0.7rem;flex-shrink:0;flex-wrap:wrap">
       <button class="btn btn-ghost" style="font-size:0.82rem;flex-shrink:0" onclick="clearAllShopCategories()" title="Reset all assignments; auto-detect will apply">🗑 Clear All</button>
-      <input type="text" id="shop-settings-search" placeholder="Filter ingredients…" oninput="renderShopSettingsList()"
+      <input type="text" id="shop-settings-search" placeholder="Filter ingredients…" oninput="_dRenderShopSettings()"
         style="flex:1;min-width:120px;padding:0.3rem 0.55rem;border:1px solid var(--border);border-radius:5px;background:var(--card);color:var(--text);font-size:0.82rem"/>
       <select id="shop-settings-cat-filter" onchange="renderShopSettingsList()"
         style="padding:0.3rem 0.4rem;border:1px solid var(--border);border-radius:5px;background:var(--card);color:var(--text);font-size:0.82rem">
@@ -3770,7 +3770,7 @@ function renderMealGrid() {
       const cats = (m.categories && m.categories.length ? m.categories : (m.category ? [m.category] : []));
       const meta = [`${m.recipes.length} recipe${m.recipes.length===1?"":"s"}`, cats.join(", ")].filter(Boolean).join(" · ");
       return `<div class="list-card" onclick="openMeal(${m.id})">
-        ${thumb ? `<img class="list-thumb" src="${esc(thumb.image)}"/>` : `<div class="list-thumb-ph">🍽️</div>`}
+        ${thumb ? `<img class="list-thumb" src="${esc(thumb.image)}" loading="lazy"/>` : `<div class="list-thumb-ph">🍽️</div>`}
         <div class="list-info">
           <div class="list-title">${esc(m.name)}</div>
           ${meta ? `<div class="list-meta">${esc(meta)}</div>` : ""}
@@ -3783,7 +3783,7 @@ function renderMealGrid() {
     container.innerHTML = filtered.map(m => {
       const thumb = m.recipes.find(r => r.image);
       const thumbHtml = thumb
-        ? `<img src="${esc(thumb.image)}" alt="${esc(m.name)}" style="width:100%;height:150px;object-fit:cover;display:block"/>`
+        ? `<img src="${esc(thumb.image)}" alt="${esc(m.name)}" loading="lazy" style="width:100%;height:150px;object-fit:cover;display:block"/>`
         : `<div class="grid-card-img-placeholder">🍽️</div>`;
       const badges = m.recipes.slice(0,3).map(r => `<span class="grid-cat-badge">${esc(r.title)}</span>`).join(" ");
       const more = m.recipes.length > 3 ? ` <span class="grid-cat-badge">+${m.recipes.length-3} more</span>` : "";
@@ -4152,7 +4152,7 @@ function renderShopBrowser() {
   browser.className = "shop-browser";
   browser.innerHTML = items.map(item => {
     const thumbHtml = item.image
-      ? `<img src="${esc(item.image)}" alt="${esc(item.title)}" style="width:100%;height:90px;object-fit:cover;display:block"/>`
+      ? `<img src="${esc(item.image)}" alt="${esc(item.title)}" loading="lazy" style="width:100%;height:90px;object-fit:cover;display:block"/>`
       : `<div style="width:100%;height:90px;background:#f0e9e9;display:flex;align-items:center;justify-content:center;font-size:1.8rem">${item.type==="meal"?"🍽️":"🥘"}</div>`;
     const badge = item.type==="meal"
       ? `<span class="meal-badge">MEAL</span> `
@@ -4358,18 +4358,20 @@ function renderShopSettingsList() {
       catFilterEl.appendChild(opt);
     });
   }
-  let items = search ? _shopSettingsIngredients.filter(k => k.includes(search)) : [..._shopSettingsIngredients];
-  if (catFilter) {
-    items = items.filter(k => (_shopSettings.ingredient_categories[k] || _autoDetectCategory(k)) === catFilter);
-  }
+  // Precompute effective category once per ingredient (avoids calling _autoDetectCategory twice)
+  let items = _shopSettingsIngredients.map(k => ({
+    key: k,
+    cat: _shopSettings.ingredient_categories[k] || _autoDetectCategory(k)
+  }));
+  if (search) items = items.filter(({key}) => key.includes(search));
+  if (catFilter) items = items.filter(({cat}) => cat === catFilter);
   const el = document.getElementById("shop-settings-list");
   if (!el) return;
   if (!items.length) {
     el.innerHTML = `<div style="padding:1rem;text-align:center;color:var(--muted);font-size:0.85rem">${_shopSettingsIngredients.length ? "No matches." : "No ingredients found in your cookbook."}</div>`;
     return;
   }
-  el.innerHTML = items.map(key => {
-    const current = _shopSettings.ingredient_categories[key] || _autoDetectCategory(key);
+  el.innerHTML = items.map(({key, cat: current}) => {
     const opts = SHOP_CATEGORY_NAMES.map(c => `<option value="${esc(c)}"${current===c?" selected":""}>${esc(c)}</option>`).join("");
     const safeKey = key.replace(/\\/g,"\\\\").replace(/'/g,"\\'");
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.38rem 0.7rem;border-bottom:1px solid var(--border)">
@@ -5445,6 +5447,20 @@ function closeChangelogPanel(e) {
   if (!e || e.target === document.getElementById("changelog-modal-backdrop"))
     document.getElementById("changelog-modal-backdrop").hidden = true;
 }
+
+// ══════════════════════════════════════════════════════════════
+// Debounced search wrappers — prevents re-rendering on every
+// individual keystroke, improving responsiveness on large lists
+// ══════════════════════════════════════════════════════════════
+function _debounce(fn, ms) {
+  let t;
+  return function(...args) { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), ms); };
+}
+const _dApplySort             = _debounce(() => applySort(),             300);
+const _dRenderShopBrowser     = _debounce(() => renderShopBrowser(),     300);
+const _dRenderMealGrid        = _debounce(() => renderMealGrid(),         300);
+const _dRenderGroupMealGrid   = _debounce(() => renderGroupMealGrid(),    300);
+const _dRenderShopSettings    = _debounce(() => renderShopSettingsList(), 250);
 </script>
 </body>
 </html>
