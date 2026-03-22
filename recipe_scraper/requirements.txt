@@ -4,3 +4,4 @@ pywebview>=6.1
 requests>=2.31
 pillow>=10.0
 xhtml2pdf>=0.2.15
+pypdf>=4.0

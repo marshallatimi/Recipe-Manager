@@ -696,6 +696,42 @@ def import_recipes_peek():
             pass
 
 
+@app.route("/recipes/import-pdf", methods=["POST"])
+def import_pdf_text():
+    """Upload a PDF and extract its text, returning it for the client-side text parser."""
+    import tempfile
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "No file uploaded"}), 400
+    if not (f.filename or "").lower().endswith(".pdf"):
+        return jsonify({"error": "Not a PDF file"}), 400
+    tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False, dir=DATA_DIR)
+    f.save(tmp.name)
+    tmp.close()
+    try:
+        try:
+            import pypdf
+            reader = pypdf.PdfReader(tmp.name)
+            pages_text = []
+            for page in reader.pages:
+                t = page.extract_text()
+                if t:
+                    pages_text.append(t.strip())
+            text = "\n".join(pages_text).strip()
+        except ImportError:
+            return jsonify({"error": "pypdf not installed — PDF import not available"}), 500
+        except Exception as e:
+            return jsonify({"error": f"Could not read PDF: {e}"}), 400
+        if not text:
+            return jsonify({"error": "No text found in this PDF. It may be a scanned image."}), 400
+        return jsonify({"text": text})
+    finally:
+        try:
+            os.unlink(tmp.name)
+        except Exception:
+            pass
+
+
 @app.route("/recipes/import-file", methods=["POST"])
 def import_recipes_to_current():
     """Upload a .txt / .cookbook / .csv and add its recipes to the active cookbook."""
@@ -1309,14 +1345,26 @@ def api_run_installer():
             # launches the app itself.  bWaitOnReturn=True blocks until fully done.
             # Window style 0 = completely hidden (no flash).
             f.write(f'sh.Run Chr(34) & "{safe_path}" & Chr(34) & " /VERYSILENT /SUPPRESSMSGBOXES", 0, True\r\n')
-            # Give Windows a moment to finish all file I/O before we touch the exe.
-            f.write('WScript.Sleep 3000\r\n')
-            # Launch the freshly-installed exe directly — we are the only thing
-            # that opens it, so there is exactly one new instance.
+            # Give Windows extra time to finish all file I/O and release handles.
+            f.write('WScript.Sleep 5000\r\n')
+            # Resolve the install path — check %ProgramFiles% first, then
+            # %ProgramW6432% (always the 64-bit Program Files even in WoW64/32-bit
+            # wscript.exe, which is where Inno Setup actually installs on 64-bit OS).
             f.write('Dim exePath\r\n')
             f.write('exePath = sh.ExpandEnvironmentStrings("%ProgramFiles%") & "\\Macleay Recipe Manager\\RecipeManager.exe"\r\n')
+            f.write('If NOT fso.FileExists(exePath) Then\r\n')
+            f.write('  exePath = sh.ExpandEnvironmentStrings("%ProgramW6432%") & "\\Macleay Recipe Manager\\RecipeManager.exe"\r\n')
+            f.write('End If\r\n')
+            f.write('If NOT fso.FileExists(exePath) Then\r\n')
+            f.write('  exePath = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\\Programs\\Macleay Recipe Manager\\RecipeManager.exe"\r\n')
+            f.write('End If\r\n')
+            # Use Shell.Application.ShellExecute — this opens the exe via the
+            # Explorer shell mechanism (same as double-clicking), giving it a clean
+            # environment rather than inheriting wscript's elevated/constrained one.
             f.write('If fso.FileExists(exePath) Then\r\n')
-            f.write('    sh.Run Chr(34) & exePath & Chr(34), 1, False\r\n')
+            f.write('  Dim shell2\r\n')
+            f.write('  Set shell2 = CreateObject("Shell.Application")\r\n')
+            f.write('  shell2.ShellExecute exePath, "", "", "open", 1\r\n')
             f.write('End If\r\n')
             f.write(f'fso.DeleteFile "{vbs_path}", True\r\n')
 

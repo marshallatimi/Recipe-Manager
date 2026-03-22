@@ -41,6 +41,7 @@ hiddenimports = (
     collect_submodules('mf2py') +
     collect_submodules('xhtml2pdf') +
     collect_submodules('reportlab') +
+    collect_submodules('pypdf') +
     [
         'sqlite3',
         'json',

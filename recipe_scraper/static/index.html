@@ -504,11 +504,8 @@
             All categories ▾
           </button>
           <div id="cat-filter-dropdown" hidden style="position:absolute;top:calc(100% + 4px);left:0;z-index:999;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.18);min-width:180px;max-height:260px;overflow-y:auto;padding:0.3rem 0">
-            <div style="padding:0.3rem 0.7rem 0.4rem;font-size:0.78rem;color:var(--muted)">Click to toggle. Multiple OK.</div>
+            <div style="padding:0.3rem 0.7rem 0.35rem;display:flex;align-items:center;justify-content:space-between"><span style="font-size:0.78rem;color:var(--muted)">Click to toggle. Multiple OK.</span>  <button onclick="clearCatFilter()" style="background:none;border:none;font-size:0.8rem;color:var(--red);cursor:pointer;padding:0;margin-left:0.5rem">Clear all</button></div>
             <div id="cat-filter-options"></div>
-            <div style="padding:0.3rem 0.7rem;border-top:1px solid var(--border);margin-top:0.2rem">
-              <button onclick="clearCatFilter()" style="background:none;border:none;font-size:0.8rem;color:var(--red);cursor:pointer;padding:0">Clear all</button>
-            </div>
           </div>
         </div>
       </div>
@@ -561,7 +558,25 @@
 
 <div id="tab-meals" class="page" hidden>
   <div id="meals-list-view">
-    <div style="display:flex;justify-content:flex-end;margin-bottom:1rem">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.6rem;margin-bottom:1rem">
+      <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;flex:1">
+        <input type="text" id="meal-search" placeholder="Search meals…"
+          oninput="renderMealGrid()"
+          style="padding:0.35rem 0.65rem;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:0.85rem;min-width:160px;flex:1;max-width:280px"/>
+        <div id="meal-cat-filter-wrap" style="position:relative;display:inline-block">
+          <button id="meal-cat-filter-btn" onclick="toggleMealCatFilter(event)"
+            style="padding:0.3rem 0.55rem;border:1px solid var(--border);border-radius:5px;background:var(--card);color:var(--text);font-size:0.82rem;cursor:pointer;white-space:nowrap;min-width:130px;text-align:left">
+            All categories ▾
+          </button>
+          <div id="meal-cat-filter-dropdown" hidden style="position:absolute;top:calc(100%+4px);left:0;z-index:999;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.18);min-width:180px;max-height:260px;overflow-y:auto;padding:.3rem 0">
+            <div style="padding:.3rem .7rem .35rem;display:flex;align-items:center;justify-content:space-between">
+              <span style="font-size:.78rem;color:var(--muted)">Click to toggle. Multiple OK.</span>
+              <button onclick="clearMealCatFilter()" style="background:none;border:none;font-size:.8rem;color:var(--red);cursor:pointer;padding:0;margin-left:.5rem">Clear all</button>
+            </div>
+            <div id="meal-cat-filter-options"></div>
+          </div>
+        </div>
+      </div>
       <button class="btn btn-primary" onclick="createMeal()">+ New Meal</button>
     </div>
     <div id="meal-grid" class="recipe-grid"></div>
@@ -574,7 +589,25 @@
 
 <div id="tab-groupmeal" class="page" hidden>
   <div id="groupmeal-list-view">
-    <div style="display:flex;justify-content:flex-end;margin-bottom:1rem">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.6rem;margin-bottom:1rem">
+      <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;flex:1">
+        <input type="text" id="gm-list-search" placeholder="Search group meals…"
+          oninput="renderGroupMealGrid()"
+          style="padding:0.35rem 0.65rem;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:0.85rem;min-width:160px;flex:1;max-width:280px"/>
+        <div id="gm-cat-filter-wrap" style="position:relative;display:inline-block">
+          <button id="gm-cat-filter-btn" onclick="toggleGmCatFilter(event)"
+            style="padding:0.3rem 0.55rem;border:1px solid var(--border);border-radius:5px;background:var(--card);color:var(--text);font-size:0.82rem;cursor:pointer;white-space:nowrap;min-width:130px;text-align:left">
+            All categories ▾
+          </button>
+          <div id="gm-cat-filter-dropdown" hidden style="position:absolute;top:calc(100%+4px);left:0;z-index:999;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.18);min-width:180px;max-height:260px;overflow-y:auto;padding:.3rem 0">
+            <div style="padding:.3rem .7rem .35rem;display:flex;align-items:center;justify-content:space-between">
+              <span style="font-size:.78rem;color:var(--muted)">Click to toggle. Multiple OK.</span>
+              <button onclick="clearGmCatFilter()" style="background:none;border:none;font-size:.8rem;color:var(--red);cursor:pointer;padding:0;margin-left:.5rem">Clear all</button>
+            </div>
+            <div id="gm-cat-filter-options"></div>
+          </div>
+        </div>
+      </div>
       <button class="btn btn-primary" onclick="createGroupMeal()">+ New Group Meal</button>
     </div>
     <div id="groupmeal-grid" class="recipe-grid"></div>
@@ -690,6 +723,10 @@
         <div style="font-size:0.82rem;color:var(--muted);line-height:1.5">A single recipe written in plain text. The first line becomes the title. Label your sections with <strong>Ingredients:</strong> and <strong>Instructions:</strong> (one item per line). You can also add <strong>Servings:</strong>, <strong>Category:</strong>, and <strong>Time:</strong> lines.</div>
       </div>
       <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:0.7rem 0.9rem">
+        <div style="font-weight:700;font-size:0.88rem;margin-bottom:0.2rem">📕 PDF Recipe <span style="font-size:0.75rem;color:var(--muted);font-weight:400">(.pdf)</span></div>
+        <div style="font-size:0.82rem;color:var(--muted);line-height:1.5">Import a single recipe from a PDF file. The app will extract the text and create a recipe — works best with digital PDFs (not scanned images). You can review and edit the result before saving.</div>
+      </div>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:0.7rem 0.9rem">
         <div style="font-weight:700;font-size:0.88rem;margin-bottom:0.2rem">📚 Cookbook File <span style="font-size:0.75rem;color:var(--muted);font-weight:400">(.cookbook)</span></div>
         <div style="font-size:0.82rem;color:var(--muted);line-height:1.5">A Macleay Recipe Manager cookbook exported from this app or another copy. <strong>Every recipe</strong> in the cookbook will be imported into your current cookbook.</div>
       </div>
@@ -703,7 +740,7 @@
     <div style="margin-bottom:0.9rem">
       <label style="font-size:0.8rem;font-weight:700;color:var(--muted);display:block;margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:0.5px">Choose a file</label>
       <label style="display:flex;align-items:center;gap:0.6rem;cursor:pointer">
-        <input type="file" id="ir-file-input" accept=".txt,.cookbook,.csv" style="display:none" onchange="handleIRFileSelect(this)">
+        <input type="file" id="ir-file-input" accept=".txt,.cookbook,.csv,.pdf" style="display:none" onchange="handleIRFileSelect(this)">
         <button class="btn btn-ghost" style="font-size:0.85rem;padding:0.45rem 1rem" onclick="document.getElementById('ir-file-input').click();event.preventDefault()">Browse…</button>
         <span id="ir-file-name" style="font-size:0.85rem;color:var(--muted)">No file chosen</span>
       </label>
@@ -2428,9 +2465,11 @@ async function submitCreateRecipe() {
 // Import Recipes Modal (My Recipes tab)
 // ══════════════════════════════════════════════════════════════
 let _irSelectedFile = null;
+let _irPdfText = null;
 
 function openImportRecipesModal() {
   _irSelectedFile = null;
+  _irPdfText = null;
   document.getElementById("ir-file-input").value = "";
   document.getElementById("ir-file-name").textContent = "No file chosen";
   document.getElementById("ir-preview").hidden = true;
@@ -2488,6 +2527,32 @@ async function handleIRFileSelect(input) {
     preview.hidden = false;
     document.getElementById("ir-status").textContent = "";
     document.getElementById("ir-import-btn").hidden = false;
+  } else if (ext === "pdf") {
+    // Upload PDF to server for text extraction
+    const form = new FormData();
+    form.append("file", file);
+    try {
+      const res = await fetch("/recipes/import-pdf", { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok) {
+        document.getElementById("ir-status").style.color = "var(--red)";
+        document.getElementById("ir-status").textContent = data.error || "Could not read PDF.";
+        return;
+      }
+      // Store extracted text for import; flag so confirmImportRecipes sends as text
+      _irPdfText = data.text;
+      const lines = data.text.split("\n").filter(l => l.trim());
+      preview.innerHTML = `<strong>Detected:</strong> PDF with ${lines.length} lines of text<br>
+        <span style="color:var(--muted)">Will be imported as 1 recipe. The title will be the filename.</span><br>
+        <details style="margin-top:0.4rem"><summary style="cursor:pointer;font-size:0.8rem;color:var(--muted)">Preview text…</summary>
+        <pre style="font-size:0.75rem;max-height:120px;overflow-y:auto;white-space:pre-wrap;margin-top:0.3rem">${esc(data.text.substring(0,800))}${data.text.length>800?"…":""}</pre></details>`;
+      preview.hidden = false;
+      document.getElementById("ir-status").textContent = "";
+      document.getElementById("ir-import-btn").hidden = false;
+    } catch {
+      document.getElementById("ir-status").style.color = "var(--red)";
+      document.getElementById("ir-status").textContent = "Failed to read PDF.";
+    }
   } else {
     // Upload to server for peek
     const form = new FormData();
@@ -2521,13 +2586,46 @@ async function handleIRFileSelect(input) {
 }
 
 async function confirmImportRecipes() {
-  if (!_irSelectedFile) return;
+  if (!_irSelectedFile && !_irPdfText) return;
   const btn = document.getElementById("ir-import-btn");
   const status = document.getElementById("ir-status");
   btn.disabled = true;
   btn.textContent = "Importing…";
   status.style.color = "var(--muted)";
   status.textContent = "Importing, please wait…";
+
+  // PDF: convert extracted text to a text-file import
+  if (_irPdfText) {
+    try {
+      const title = (_irSelectedFile?.name || "Recipe").replace(/\.pdf$/i, "");
+      const textContent = title + "\n\n" + _irPdfText;
+      const blob = new Blob([textContent], { type: "text/plain" });
+      const form = new FormData();
+      form.append("file", new File([blob], title + ".txt", { type: "text/plain" }));
+      const res = await fetch("/recipes/import-file", { method: "POST", body: form });
+      const data = await res.json();
+      if (res.ok && data.imported > 0) {
+        status.style.color = "var(--text)";
+        status.textContent = `Imported 1 recipe from PDF!`;
+        btn.hidden = true;
+        await loadSavedRecipes();
+        updateSavedCount();
+        setTimeout(closeImportRecipesModal, 1200);
+      } else {
+        status.style.color = "var(--red)";
+        status.textContent = data.error || "Import failed.";
+        btn.disabled = false;
+        btn.textContent = "Import";
+      }
+    } catch {
+      status.style.color = "var(--red)";
+      status.textContent = "Import failed.";
+      btn.disabled = false;
+      btn.textContent = "Import";
+    }
+    _irPdfText = null;
+    return;
+  }
 
   const form = new FormData();
   form.append("file", _irSelectedFile);
@@ -2571,6 +2669,8 @@ function menuAction(fn) { closeAllMenus(); fn(); }
 document.addEventListener("click", e => {
   if (!e.target.closest(".menu-wrap")) closeAllMenus();
 });
+document.addEventListener("click", e => { if (!e.target.closest("#meal-cat-filter-wrap")) { const dd=document.getElementById("meal-cat-filter-dropdown"); if(dd) dd.hidden=true; } });
+document.addEventListener("click", e => { if (!e.target.closest("#gm-cat-filter-wrap")) { const dd=document.getElementById("gm-cat-filter-dropdown"); if(dd) dd.hidden=true; } });
 
 // ══════════════════════════════════════════════════════════════
 // Settings
@@ -3621,15 +3721,24 @@ window._renderMealsGrid = renderMealGrid; // expose for applySettings
 function renderMealGrid() {
   const container = document.getElementById("meal-grid");
   if (!container) return;
-  if (!savedMeals.length) {
+  const searchQ = (document.getElementById("meal-search")?.value || "").toLowerCase().trim();
+  const filtered = savedMeals.filter(m => {
+    if (searchQ && !m.name.toLowerCase().includes(searchQ)) return false;
+    if (_mealActiveCatFilters.size) {
+      const mCats = m.categories && m.categories.length ? m.categories : (m.category ? [m.category] : []);
+      if (![...(_mealActiveCatFilters)].some(f => mCats.includes(f))) return false;
+    }
+    return true;
+  });
+  if (!filtered.length) {
     container.className = "recipe-grid";
-    container.innerHTML = `<div class="empty-state"><div class="big-icon">🍽️</div><p>No meals yet.<br>Create one to group recipes together.</p></div>`;
+    container.innerHTML = `<div class="empty-state"><div class="big-icon">🍽️</div><p>${savedMeals.length ? "No meals match your search." : "No meals yet.<br>Create one to group recipes together."}</p></div>`;
     return;
   }
   const mode = appSettings.viewMode || "grid";
   if (mode === "list") {
     container.className = "list-view";
-    container.innerHTML = savedMeals.map(m => {
+    container.innerHTML = filtered.map(m => {
       const thumb = m.recipes.find(r => r.image);
       const cats = (m.categories && m.categories.length ? m.categories : (m.category ? [m.category] : []));
       const meta = [`${m.recipes.length} recipe${m.recipes.length===1?"":"s"}`, cats.join(", ")].filter(Boolean).join(" · ");
@@ -3644,7 +3753,7 @@ function renderMealGrid() {
     }).join("");
   } else {
     container.className = "recipe-grid";
-    container.innerHTML = savedMeals.map(m => {
+    container.innerHTML = filtered.map(m => {
       const thumb = m.recipes.find(r => r.image);
       const thumbHtml = thumb
         ? `<img src="${esc(thumb.image)}" alt="${esc(m.name)}" style="width:100%;height:150px;object-fit:cover;display:block"/>`
@@ -3663,6 +3772,54 @@ function renderMealGrid() {
       </div>`;
     }).join("");
   }
+}
+
+let _mealActiveCatFilters = new Set();
+
+function toggleMealCatFilter(e) {
+  e.stopPropagation();
+  const dd = document.getElementById("meal-cat-filter-dropdown");
+  if (!dd) return;
+  dd.hidden = !dd.hidden;
+  if (!dd.hidden) renderMealCatFilterOptions();
+}
+
+function renderMealCatFilterOptions() {
+  const opts = document.getElementById("meal-cat-filter-options");
+  if (!opts) return;
+  const cats = [...new Set(savedMeals.flatMap(m =>
+    m.categories && m.categories.length ? m.categories : (m.category ? [m.category] : [])
+  ))].sort();
+  if (!cats.length) { opts.innerHTML = `<div style="padding:.4rem .7rem;font-size:.82rem;color:var(--muted)">No categories yet.</div>`; return; }
+  opts.innerHTML = cats.map(c => `
+    <div onclick="toggleMealCatOption('${c.replace(/'/g,"\\'")}',event)"
+      style="padding:.35rem .7rem;cursor:pointer;font-size:.85rem;color:var(--text);display:flex;align-items:center;gap:.4rem;${_mealActiveCatFilters.has(c)?'background:#f0e9e9;font-weight:700;color:var(--red)':''}">
+      <span style="font-size:1rem">${_mealActiveCatFilters.has(c)?'✓':'○'}</span>${esc(c)}
+    </div>`).join("");
+}
+
+function toggleMealCatOption(cat, e) {
+  if (e) e.stopPropagation();
+  if (_mealActiveCatFilters.has(cat)) _mealActiveCatFilters.delete(cat);
+  else _mealActiveCatFilters.add(cat);
+  renderMealCatFilterOptions();
+  updateMealCatFilterBtn();
+  renderMealGrid();
+}
+
+function clearMealCatFilter() {
+  _mealActiveCatFilters.clear();
+  renderMealCatFilterOptions();
+  updateMealCatFilterBtn();
+  renderMealGrid();
+}
+
+function updateMealCatFilterBtn() {
+  const btn = document.getElementById("meal-cat-filter-btn");
+  if (!btn) return;
+  btn.textContent = _mealActiveCatFilters.size
+    ? `${[..._mealActiveCatFilters].join(", ")} ▾`
+    : "All categories ▾";
 }
 
 function openMeal(id) {
@@ -4455,15 +4612,24 @@ async function initGroupMealTab() {
 
 function renderGroupMealList() {
   const container = document.getElementById("groupmeal-grid");
-  if (!savedGroupMeals.length) {
+  const gmSearch = (document.getElementById("gm-list-search")?.value || "").toLowerCase().trim();
+  const gmFiltered = savedGroupMeals.filter(g => {
+    if (gmSearch && !g.name.toLowerCase().includes(gmSearch)) return false;
+    if (_gmActiveCatFilters.size) {
+      const gCats = g.categories && g.categories.length ? g.categories : (g.category ? [g.category] : []);
+      if (![..._gmActiveCatFilters].some(f => gCats.includes(f))) return false;
+    }
+    return true;
+  });
+  if (!gmFiltered.length) {
     container.className = "recipe-grid";
-    container.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:3rem 0;color:var(--muted)">No group meals yet. Click <strong>+ New Group Meal</strong> to create one.</div>`;
+    container.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:3rem 0;color:var(--muted)">${savedGroupMeals.length ? "No group meals match your search." : "No group meals yet. Click <strong>+ New Group Meal</strong> to create one."}</div>`;
     return;
   }
   const mode = appSettings.viewMode || "grid";
   if (mode === "list") {
     container.className = "list-view";
-    container.innerHTML = savedGroupMeals.map(g => {
+    container.innerHTML = gmFiltered.map(g => {
       const n = g.meals ? g.meals.length : 0;
       return `<div class="list-card" onclick="openGroupMeal(${g.id})">
         <div class="list-thumb-ph">🍴</div>
@@ -4476,7 +4642,7 @@ function renderGroupMealList() {
     }).join("");
   } else {
     container.className = "recipe-grid";
-    container.innerHTML = savedGroupMeals.map(g => {
+    container.innerHTML = gmFiltered.map(g => {
       const n = g.meals ? g.meals.length : 0;
       return `<div class="grid-card" onclick="openGroupMeal(${g.id})">
         <button class="grid-card-del" onclick="(async(e)=>{e.stopPropagation();await deleteGroupMealById(${g.id})})(event)" title="Delete">✕</button>
@@ -4488,6 +4654,55 @@ function renderGroupMealList() {
       </div>`;
     }).join("");
   }
+}
+function renderGroupMealGrid() { renderGroupMealList(); }
+
+let _gmActiveCatFilters = new Set();
+
+function toggleGmCatFilter(e) {
+  e.stopPropagation();
+  const dd = document.getElementById("gm-cat-filter-dropdown");
+  if (!dd) return;
+  dd.hidden = !dd.hidden;
+  if (!dd.hidden) renderGmCatFilterOptions();
+}
+
+function renderGmCatFilterOptions() {
+  const opts = document.getElementById("gm-cat-filter-options");
+  if (!opts) return;
+  const cats = [...new Set(savedGroupMeals.flatMap(g =>
+    g.categories && g.categories.length ? g.categories : (g.category ? [g.category] : [])
+  ))].sort();
+  if (!cats.length) { opts.innerHTML = `<div style="padding:.4rem .7rem;font-size:.82rem;color:var(--muted)">No categories yet.</div>`; return; }
+  opts.innerHTML = cats.map(c => `
+    <div onclick="toggleGmCatOption('${c.replace(/'/g,"\\'")}',event)"
+      style="padding:.35rem .7rem;cursor:pointer;font-size:.85rem;color:var(--text);display:flex;align-items:center;gap:.4rem;${_gmActiveCatFilters.has(c)?'background:#f0e9e9;font-weight:700;color:var(--red)':''}">
+      <span style="font-size:1rem">${_gmActiveCatFilters.has(c)?'✓':'○'}</span>${esc(c)}
+    </div>`).join("");
+}
+
+function toggleGmCatOption(cat, e) {
+  if (e) e.stopPropagation();
+  if (_gmActiveCatFilters.has(cat)) _gmActiveCatFilters.delete(cat);
+  else _gmActiveCatFilters.add(cat);
+  renderGmCatFilterOptions();
+  updateGmCatFilterBtn();
+  renderGroupMealList();
+}
+
+function clearGmCatFilter() {
+  _gmActiveCatFilters.clear();
+  renderGmCatFilterOptions();
+  updateGmCatFilterBtn();
+  renderGroupMealList();
+}
+
+function updateGmCatFilterBtn() {
+  const btn = document.getElementById("gm-cat-filter-btn");
+  if (!btn) return;
+  btn.textContent = _gmActiveCatFilters.size
+    ? `${[..._gmActiveCatFilters].join(", ")} ▾`
+    : "All categories ▾";
 }
 
 async function createGroupMeal() {
@@ -5071,6 +5286,20 @@ function doPrint(fullHtml) {
 }
 
 const CHANGELOG = [
+  {
+    version: "v1.2.6",
+    notes: [
+      "Search bar and multi-category filter added to Meals tab",
+      "Search bar and multi-category filter added to Group Meals tab",
+      "'Clear all' category filter moved to top of list in My Recipes for quick access",
+      "PDF import: import a recipe directly from a PDF file via the Import Recipes modal",
+      "Linked (external) cookbooks: link .cookbook files from any folder or network drive and they appear in the Cookbooks tab",
+      "Cookbooks missing from disk automatically removed from the list",
+      "Update fix: installer no longer double-launches the app; 64-bit install path correctly detected on all machines",
+      "PDF export now falls back to Chrome or Brave if Edge is not installed",
+      "New ingredients are automatically assigned a shopping category (no more 'Auto Assign All' button)",
+    ]
+  },
   {
     version: "v1.2.5",
     notes: [
