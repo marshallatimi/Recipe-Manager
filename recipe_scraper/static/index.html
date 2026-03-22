@@ -899,13 +899,13 @@
       Assign each ingredient to a category. Auto-detect applies automatically for unassigned ingredients.
     </div>
     <div style="display:flex;gap:0.5rem;margin-bottom:0.7rem;flex-shrink:0;flex-wrap:wrap">
+      <button class="btn btn-ghost" style="font-size:0.82rem;flex-shrink:0" onclick="clearAllShopCategories()" title="Reset all assignments; auto-detect will apply">🗑 Clear All</button>
       <input type="text" id="shop-settings-search" placeholder="Filter ingredients…" oninput="renderShopSettingsList()"
         style="flex:1;min-width:120px;padding:0.3rem 0.55rem;border:1px solid var(--border);border-radius:5px;background:var(--card);color:var(--text);font-size:0.82rem"/>
       <select id="shop-settings-cat-filter" onchange="renderShopSettingsList()"
         style="padding:0.3rem 0.4rem;border:1px solid var(--border);border-radius:5px;background:var(--card);color:var(--text);font-size:0.82rem">
         <option value="">All categories</option>
       </select>
-      <button class="btn btn-ghost" style="font-size:0.82rem" onclick="clearAllShopCategories()" title="Reset all assignments; auto-detect will apply">🗑 Clear All</button>
     </div>
     <div id="shop-settings-list" style="flex:1;overflow-y:auto;border:1px solid var(--border);border-radius:6px;min-height:0"></div>
     <div style="display:flex;justify-content:flex-end;gap:0.5rem;margin-top:0.8rem;flex-shrink:0">
@@ -3701,7 +3701,7 @@ function renderMealDetail() {
             <div class="meal-recipe-title">${esc(r.title)}</div>
             <div class="meal-recipe-meta">${esc(r.servings||"")}</div>
           </div>
-          <input type="number" min="0.5" step="0.5" value="${curSrv}"
+          <input type="number" min="0" step="0.5" value="${curSrv}" title="Set to 0 to skip from print/shopping"
             placeholder="${defPlaceholder}"
             title="Override servings for this recipe"
             style="width:100px;padding:0.22rem 0.4rem;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:0.8rem;flex-shrink:0"
@@ -3839,7 +3839,9 @@ let _mealRecipeServingsTimer = {};
 async function setMealRecipeServings(rid, val) {
   const m = selectedMeal;
   if (!m) return;
-  const srv = val && parseFloat(val) > 0 ? parseFloat(val) : null;
+  // val="" clears override; val="0" means skip this recipe from print/shopping
+  const parsed = parseFloat(val);
+  const srv = (val !== "" && val != null && !isNaN(parsed) && parsed >= 0) ? parsed : null;
   const rec = m.recipes.find(r => r.id === rid);
   if (rec) rec.recipe_servings = srv;
   const idx = savedMeals.findIndex(x => x.id === m.id);
@@ -4587,10 +4589,10 @@ function renderGroupMealDetail() {
             <span class="gm-meal-chevron">▶</span>
             <span class="gm-meal-name">${esc(m.name)}</span>
             <span class="gm-meal-meta">${rc} recipe${rc!==1?"s":""}</span>
-            <input type="number" class="gm-srv-input" min="0.5" step="0.5"
+            <input type="number" class="gm-srv-input" min="0" step="0.5"
               style="margin-left:auto"
               placeholder="${mealPh}" value="${mealVal}"
-              title="Default servings for all recipes in this meal"
+              title="Servings for this meal. Set to 0 to skip entire meal from print/shopping."
               onchange="updateGroupMealServings(${m.slot_id != null ? m.slot_id : m.id}, this.value, ${m.slot_id != null})"
               onclick="event.stopPropagation()"/>
             <button class="btn-icon" onclick="event.stopPropagation();moveGroupMealSlot(${m.slot_id}, -1)" title="Move up" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:1rem;padding:0 2px">↑</button>
@@ -4699,7 +4701,9 @@ async function updateGroupDefaultServings(val) {
 async function updateGroupMealServings(slotOrMealId, val, useSlot) {
   const g = selectedGroupMeal;
   if (!g) return;
-  const srv = val && parseFloat(val) > 0 ? parseFloat(val) : null;
+  // val="" clears override; val="0" skips the entire meal from print/shopping
+  const parsed = parseFloat(val);
+  const srv = (val !== "" && val != null && !isNaN(parsed) && parsed >= 0) ? parsed : null;
   const m = useSlot
     ? (g.meals||[]).find(m => m.slot_id === slotOrMealId)
     : (g.meals||[]).find(m => m.id === slotOrMealId);
@@ -4909,6 +4913,7 @@ function buildShoppingHtmlByMeal(g) {
     if (!full || !full.recipes || !full.recipes.length) return;
     const rs = gm.recipe_servings || {};
     const mealServings = gm.servings != null ? gm.servings : (g.default_servings != null ? g.default_servings : null);
+    if (mealServings !== null && parseFloat(mealServings) === 0) return; // skip entire meal
     const ings = [];
     full.recipes.forEach(mr => {
       const effectiveServings = rs[mr.id] != null ? rs[mr.id] : mealServings;

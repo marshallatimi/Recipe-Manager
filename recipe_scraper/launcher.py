@@ -15,22 +15,39 @@ import shutil
 import webview
 
 
-def _find_edge() -> str:
-    """Return the best available path to the Microsoft Edge executable."""
+def _find_browser() -> str | None:
+    """Return path to the best available Chromium-based browser (Edge or Chrome)."""
+    lappdata = os.environ.get("LOCALAPPDATA", "")
+    pfiles   = os.environ.get("PROGRAMFILES", "")
+    pfiles86 = os.environ.get("PROGRAMFILES(X86)", os.environ.get("PROGRAMW6432", ""))
+
     candidates = [
-        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
-        os.path.join(os.environ.get("LOCALAPPDATA",  ""), r"Microsoft\Edge\Application\msedge.exe"),
-        os.path.join(os.environ.get("PROGRAMFILES",  ""), r"Microsoft\Edge\Application\msedge.exe"),
-        os.path.join(os.environ.get("PROGRAMW6432",  ""), r"Microsoft\Edge\Application\msedge.exe"),
+        # Edge — stable, beta, dev, canary
+        os.path.join(pfiles86, r"Microsoft\Edge\Application\msedge.exe"),
+        os.path.join(pfiles,   r"Microsoft\Edge\Application\msedge.exe"),
+        os.path.join(lappdata, r"Microsoft\Edge\Application\msedge.exe"),
+        # Chrome — stable, beta, canary
+        os.path.join(pfiles,   r"Google\Chrome\Application\chrome.exe"),
+        os.path.join(pfiles86, r"Google\Chrome\Application\chrome.exe"),
+        os.path.join(lappdata, r"Google\Chrome\Application\chrome.exe"),
+        # Chrome SxS (Canary)
+        os.path.join(lappdata, r"Google\Chrome SxS\Application\chrome.exe"),
+        # Brave
+        os.path.join(pfiles,   r"BraveSoftware\Brave-Browser\Application\brave.exe"),
+        os.path.join(pfiles86, r"BraveSoftware\Brave-Browser\Application\brave.exe"),
     ]
     for c in candidates:
         if c and os.path.isfile(c):
             return c
-    found = shutil.which("msedge") or shutil.which("msedge.exe")
-    if found:
-        return found
-    return "msedge"  # last resort — rely on PATH
+    for name in ("msedge", "msedge.exe", "google-chrome", "chrome", "chrome.exe", "brave", "brave.exe"):
+        found = shutil.which(name)
+        if found:
+            return found
+    return None
+
+# Keep old name as alias so existing call sites in _html_to_pdf still work
+def _find_edge() -> str:
+    return _find_browser() or "msedge"
 
 # ── Path setup ────────────────────────────────────────────────────────────────
 if getattr(sys, "frozen", False):
@@ -291,7 +308,11 @@ def _html_to_pdf(html_content: str, pdf_path: str) -> str | None:
     """
     err = _pisa_html_to_pdf(html_content, pdf_path)
     if err is not None:
-        # pisa failed — fall back to Edge headless
+        # pisa failed — fall back to a Chromium-based browser (Edge, Chrome, Brave…)
+        browser = _find_browser()
+        if not browser:
+            return ("PDF generation failed. Please install Google Chrome or Microsoft Edge "
+                    "to enable PDF export.")
         import tempfile
         tmp = None
         try:
@@ -301,7 +322,7 @@ def _html_to_pdf(html_content: str, pdf_path: str) -> str | None:
                 f.write(html_content)
                 tmp = f.name
             file_url = "file:///" + tmp.replace("\\", "/")
-            return _edge_html_to_pdf(_find_edge(), file_url, pdf_path)
+            return _edge_html_to_pdf(browser, file_url, pdf_path)
         finally:
             if tmp and os.path.exists(tmp):
                 try: os.unlink(tmp)
