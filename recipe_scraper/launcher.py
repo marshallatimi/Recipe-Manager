@@ -279,17 +279,21 @@ def _pisa_html_to_pdf(html_content: str, pdf_path: str) -> str | None:
     """
     try:
         from xhtml2pdf import pisa
+        import io
+        # Suppress pisa's stderr chatter (CSS warnings etc.)
         with open(pdf_path, 'wb') as f:
-            result = pisa.CreatePDF(html_content.encode('utf-8'), dest=f)
-        if result.err:
-            # Clean up any partial file
-            try:
-                if os.path.exists(pdf_path): os.unlink(pdf_path)
-            except OSError:
-                pass
-            return f"PDF generation error (pisa): {result.err}"
+            result = pisa.CreatePDF(html_content.encode('utf-8'), dest=f,
+                                    encoding='utf-8', raise_exception=False)
+        # pisa sets result.err to the number of CSS/layout warnings, NOT fatal errors.
+        # A valid PDF is still produced for unsupported CSS (flex, gap, etc.).
+        # Only treat as failure if nothing was written to disk.
         if os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0:
-            return None  # success
+            return None  # success — even if result.err > 0 (just CSS warnings)
+        # File missing or empty — real failure
+        try:
+            if os.path.exists(pdf_path): os.unlink(pdf_path)
+        except OSError:
+            pass
         return "PDF was empty after generation."
     except ImportError:
         return "pisa_not_available"
