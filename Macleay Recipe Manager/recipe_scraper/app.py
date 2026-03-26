@@ -105,6 +105,8 @@ def get_cookbooks_list():
         if norm in seen_paths:
             return
         seen_paths.add(norm)
+        if not os.path.exists(path):
+            return  # Don't create empty SQLite files by connecting to missing paths
         name = os.path.splitext(os.path.basename(path))[0]
         try:
             c = sqlite3.connect(path)
@@ -530,8 +532,8 @@ def _parse_iso_duration(val):
     return ' '.join(parts) or None
 
 
-def _scrape_jsonld_fallback(url):
-    """Fetch a URL and extract a recipe from JSON-LD schema.org/Recipe data."""
+def _fetch_url_html(url):
+    """Fetch a URL and return the HTML as a string, or None on failure."""
     try:
         req = urllib.request.Request(url, headers={
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -540,10 +542,13 @@ def _scrape_jsonld_fallback(url):
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
         with urllib.request.urlopen(req, context=ctx, timeout=12) as resp:
-            html = resp.read().decode('utf-8', errors='replace')
+            return resp.read().decode('utf-8', errors='replace')
     except Exception:
         return None
 
+
+def _extract_jsonld_recipe(html, url):
+    """Extract a recipe from JSON-LD schema.org/Recipe data in pre-fetched HTML."""
     # Find all JSON-LD blocks
     for raw in re.finditer(
             r'<script[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
@@ -633,6 +638,122 @@ def _scrape_jsonld_fallback(url):
     return None
 
 
+def _scrape_jsonld_fallback(url):
+    """Fetch a URL and extract a recipe from JSON-LD schema.org/Recipe data."""
+    html = _fetch_url_html(url)
+    if not html:
+        return None
+    return _extract_jsonld_recipe(html, url)
+
+
+def _extract_html_generic(html, url):
+    """Last-resort: extract recipe-like content from raw HTML using heuristics.
+    Looks for ingredients in <ul> lists and instructions in <ol> lists,
+    guided by class/id names containing 'ingredient', 'instruction', 'direction', 'step'."""
+
+    def _strip_tags(s):
+        return re.sub(r'<[^>]+>', ' ', s).strip()
+
+    def _decode_entities(s):
+        s = re.sub(r'&amp;', '&', s)
+        s = re.sub(r'&lt;', '<', s)
+        s = re.sub(r'&gt;', '>', s)
+        s = re.sub(r'&nbsp;', ' ', s)
+        s = re.sub(r'&#(\d+);', lambda m: chr(int(m.group(1))), s)
+        return s
+
+    # Remove script/style/nav/footer noise
+    html_clean = re.sub(
+        r'<(script|style|nav|footer|header|aside|noscript)[^>]*>.*?</\1>',
+        '', html, flags=re.DOTALL | re.IGNORECASE)
+
+    def _text(s):
+        return _decode_entities(_strip_tags(s)).strip()
+
+    # Title: first <h1>
+    title = None
+    h1 = re.search(r'<h1[^>]*>(.*?)</h1>', html_clean, re.DOTALL | re.IGNORECASE)
+    if h1:
+        title = _text(h1.group(1))
+    # Fallback: <title> tag
+    if not title:
+        t = re.search(r'<title[^>]*>(.*?)</title>', html_clean, re.DOTALL | re.IGNORECASE)
+        if t:
+            title = _text(t.group(1))
+
+    # Ingredients: look for a <ul> or <ol> whose class/id suggests ingredients
+    ingredients = []
+    ing_section = re.search(
+        r'<(?:ul|ol)([^>]*(?:class|id)=["\'][^"\']*ingredient[^"\']*["\'][^>]*)>(.*?)</(?:ul|ol)>',
+        html_clean, re.DOTALL | re.IGNORECASE)
+    if ing_section:
+        items = re.findall(r'<li[^>]*>(.*?)</li>', ing_section.group(2), re.DOTALL | re.IGNORECASE)
+        ingredients = [_text(i) for i in items if _text(i)]
+    # Broader fallback: any container whose class/id matches
+    if not ingredients:
+        ing_wrap = re.search(
+            r'<(?:div|section|ul)[^>]*(?:class|id)=["\'][^"\']*ingredient[^"\']*["\'][^>]*>(.*?)</(?:div|section|ul)>',
+            html_clean, re.DOTALL | re.IGNORECASE)
+        if ing_wrap:
+            items = re.findall(r'<li[^>]*>(.*?)</li>', ing_wrap.group(1), re.DOTALL | re.IGNORECASE)
+            if not items:
+                items = re.findall(r'<p[^>]*>(.*?)</p>', ing_wrap.group(1), re.DOTALL | re.IGNORECASE)
+            ingredients = [_text(i) for i in items if _text(i)]
+
+    # Instructions: look for an <ol> or <ul> whose class/id suggests instructions
+    steps = []
+    instr_pattern = r'instruction|direction|step|method|preparation'
+    instr_section = re.search(
+        r'<(?:ol|ul)([^>]*(?:class|id)=["\'][^"\']*(?:' + instr_pattern + r')[^"\']*["\'][^>]*)>(.*?)</(?:ol|ul)>',
+        html_clean, re.DOTALL | re.IGNORECASE)
+    if instr_section:
+        items = re.findall(r'<li[^>]*>(.*?)</li>', instr_section.group(2), re.DOTALL | re.IGNORECASE)
+        steps = [_text(i) for i in items if _text(i)]
+    # Broader fallback
+    if not steps:
+        instr_wrap = re.search(
+            r'<(?:div|section|ol)[^>]*(?:class|id)=["\'][^"\']*(?:' + instr_pattern + r')[^"\']*["\'][^>]*>(.*?)</(?:div|section|ol)>',
+            html_clean, re.DOTALL | re.IGNORECASE)
+        if instr_wrap:
+            items = re.findall(r'<li[^>]*>(.*?)</li>', instr_wrap.group(1), re.DOTALL | re.IGNORECASE)
+            if not items:
+                items = re.findall(r'<p[^>]*>(.*?)</p>', instr_wrap.group(1), re.DOTALL | re.IGNORECASE)
+            steps = [_text(i) for i in items if _text(i)]
+
+    # Servings: search visible text for a yield/servings number
+    servings = None
+    srv_match = re.search(
+        r'(?:serves?|servings?|yield[s]?|makes?)[^\d<]*(\d+(?:\s*[-\u2013]\s*\d+)?(?:\s+\w+)?)',
+        html_clean, re.IGNORECASE)
+    if srv_match:
+        servings = srv_match.group(1).strip()
+
+    if not title and not ingredients:
+        return None
+
+    try:
+        from urllib.parse import urlparse as _up
+        domain = _up(url).netloc.replace('www.', '')
+    except Exception:
+        domain = ''
+
+    ig = [{"purpose": None, "ingredients": ingredients}]
+    instruction_groups = parse_instruction_groups(steps)
+    return {
+        "title": title or "",
+        "servings": servings or "",
+        "servings_num": parse_servings_num(servings or ""),
+        "ingredients": ingredients,
+        "instructions": flatten_groups(instruction_groups, "steps"),
+        "ingredient_groups": ig,
+        "instruction_groups": instruction_groups,
+        "image": None,
+        "total_time": None,
+        "site_name": domain,
+        "source_url": url,
+    }
+
+
 @app.route("/scrape", methods=["POST"])
 def scrape():
     data = request.get_json()
@@ -668,11 +789,18 @@ def scrape():
     except Exception as e:
         library_error = str(e)
 
-    # Fallback: parse JSON-LD schema.org/Recipe from raw HTML
+    # Fallback: fetch page HTML once and try JSON-LD then generic HTML parsing
     try:
-        fallback = _scrape_jsonld_fallback(url)
-        if fallback and (fallback.get("title") or fallback.get("ingredients")):
-            return jsonify(fallback)
+        raw_html = _fetch_url_html(url)
+        if raw_html:
+            # 2nd fallback: JSON-LD schema.org/Recipe
+            jsonld = _extract_jsonld_recipe(raw_html, url)
+            if jsonld and (jsonld.get("title") or jsonld.get("ingredients")):
+                return jsonify(jsonld)
+            # 3rd fallback: generic HTML heuristics (class/id names, <h1>, <ul>/<ol>)
+            generic = _extract_html_generic(raw_html, url)
+            if generic and (generic.get("title") or generic.get("ingredients")):
+                return jsonify(generic)
     except Exception:
         pass
 
@@ -818,8 +946,8 @@ def _insert_recipes_into_db(db, recipes):
             """INSERT INTO recipes
                (title,servings,servings_num,ingredients,instructions,
                 ingredient_groups,instruction_groups,image,total_time,
-                site_name,source_url,category,categories)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                site_name,source_url,category,categories,notes)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (r.get("title", "Untitled"),
              r.get("servings"), r.get("servings_num"),
              json.dumps(r.get("ingredients", [])),
@@ -828,7 +956,8 @@ def _insert_recipes_into_db(db, recipes):
              json.dumps(sg) if sg else None,
              r.get("image"), r.get("total_time"),
              r.get("site_name"), r.get("source_url"),
-             category, json.dumps(cats) if cats else None),
+             category, json.dumps(cats) if cats else None,
+             r.get("notes") or None),
         )
 
 
@@ -2039,12 +2168,37 @@ def restore_backup():
     # Determine which cookbook this backup belongs to (by name in filename)
     cb_name = _backup_cookbook_name(os.path.basename(backup_path))
     target_path = os.path.join(COOKBOOKS_DIR, cb_name + ".cookbook")
-    # Fall back to active cookbook if no match found
+    # If the target doesn't exist in the default cookbooks dir, check linked cookbooks
     if not os.path.exists(target_path):
-        target_path = active_db_path()
+        s = load_settings()
+        for lpath in s.get("linkedCookbooks", []):
+            lname = os.path.splitext(os.path.basename(lpath))[0]
+            if lname.lower() == cb_name.lower() and os.path.exists(lpath):
+                target_path = lpath
+                break
+    # If still not found, refuse — don't silently overwrite an unrelated cookbook
+    if not os.path.exists(target_path):
+        return jsonify({"error": f"No matching cookbook '{cb_name}' found to restore into. The original cookbook file may have been moved or deleted."}), 404
     shutil.copy2(backup_path, target_path)
     _invalidate_cookbooks_cache()
     return jsonify({"ok": True, "restored_to": cb_name})
+
+
+@app.route("/backups/open-folder", methods=["POST"])
+def open_backups_folder():
+    """Open the backups folder in the system file manager."""
+    backups_dir = os.path.join(DATA_DIR, "backups")
+    os.makedirs(backups_dir, exist_ok=True)
+    try:
+        if sys.platform == "win32":
+            os.startfile(backups_dir)
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", backups_dir])
+        else:
+            subprocess.Popen(["xdg-open", backups_dir])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    return jsonify({"ok": True})
 
 
 # ── CSV helpers ────────────────────────────────────────────────────────────────
