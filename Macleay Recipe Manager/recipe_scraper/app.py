@@ -2596,24 +2596,9 @@ def import_cookbook():
         init_db()
         _active_db["path"] = old_path          # restore — caller must switch explicitly
         conn = sqlite3.connect(dest_path)
+        conn.row_factory = sqlite3.Row
         try:
-            for r in recipes:
-                ig = r.get("ingredient_groups")
-                sg = r.get("instruction_groups")
-                conn.execute(
-                    """INSERT INTO recipes
-                       (title,servings,servings_num,ingredients,instructions,
-                        ingredient_groups,instruction_groups,image,total_time,
-                        site_name,source_url,category)
-                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
-                    (r["title"], r.get("servings"), r.get("servings_num"),
-                     json.dumps(r.get("ingredients", [])),
-                     json.dumps(r.get("instructions", [])),
-                     json.dumps(ig) if ig else None,
-                     json.dumps(sg) if sg else None,
-                     r.get("image"), r.get("total_time"),
-                     r.get("site_name"), r.get("source_url"), r.get("category")),
-                )
+            _insert_recipes_into_db(conn, recipes)
             conn.commit()
         finally:
             conn.close()
