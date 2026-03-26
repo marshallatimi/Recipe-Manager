@@ -1,0 +1,124 @@
+name: Build & Release
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Triggers:
+#   • Push a tag like "v1.2.3"  → build + create a GitHub Release with
+#                                  both the portable .exe AND the installer
+#   • "Run workflow" button      → build only (no release, artifacts kept 30 days)
+# ─────────────────────────────────────────────────────────────────────────────
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        working-directory: 'Macleay Recipe Manager/recipe_scraper'
+
+    steps:
+      # ── 1. Source ───────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. Python ───────────────────────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      # ── 3. Dependencies ─────────────────────────────────────────────────────
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pillow pyinstaller
+
+      # ── 4. Generate app icon (icon.ico) ─────────────────────────────────────
+      - name: Generate icon
+        run: python generate_icon.py
+
+      # ── 5. Resolve version string ────────────────────────────────────────────
+      - name: Set version
+        id: ver
+        shell: pwsh
+        run: |
+          $tag = '${{ github.ref_name }}'
+          $ver = $tag -replace '^v', ''
+          if (-not $ver -or $ver -eq '') { $ver = '0.0.0' }
+          echo "VERSION=$ver" >> $env:GITHUB_OUTPUT
+          echo "Resolved version: $ver"
+
+      # ── 6. Generate Windows file-properties version resource ─────────────────
+      - name: Generate version info
+        run: python create_version_info.py ${{ steps.ver.outputs.VERSION }}
+
+      # ── 7. Build portable .exe with PyInstaller ──────────────────────────────
+      - name: Build exe (PyInstaller)
+        run: pyinstaller recipe_manager.spec
+
+      # ── 8. Build Windows installer with Inno Setup ───────────────────────────
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $ver = '${{ steps.ver.outputs.VERSION }}'
+          if (-not $ver -or $ver -eq '0.0.0') { $ver = '1.0.0' }
+          iscc "/DAppVersion=$ver" installer.iss
+
+      # ── 9. Upload portable exe artifact ──────────────────────────────────────
+      - name: Upload portable exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: RecipeManager-Portable-${{ steps.ver.outputs.VERSION }}
+          path: 'Macleay Recipe Manager/recipe_scraper/dist/RecipeManager.exe'
+          retention-days: 30
+
+      # ── 10. Upload installer artifact ────────────────────────────────────────
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: RecipeManager-Installer-${{ steps.ver.outputs.VERSION }}
+          path: 'Macleay Recipe Manager/recipe_scraper/Output/MacleayRecipeManager-Setup.exe'
+          retention-days: 30
+
+      # ── 11. Create GitHub Release (tag pushes only) ───────────────────────────
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Macleay Recipe Manager ${{ github.ref_name }}"
+          body: |
+            ## 🍴 Macleay Recipe Manager ${{ github.ref_name }}
+
+            ### Download
+
+            | File | What it is |
+            |------|-----------|
+            | **MacleayRecipeManager-Setup.exe** | ✅ **Recommended** — Windows installer. Adds Start Menu & desktop shortcut, includes uninstaller. |
+            | **RecipeManager.exe** | 🗂️ **Portable** — single file, no install required. Run it from anywhere. |
+
+            > **Requirements:** Windows 10 or later (WebView2 / Microsoft Edge is built in)
+
+            ### Installation (installer)
+            1. Download **MacleayRecipeManager-Setup.exe**
+            2. Run it and follow the wizard (takes ~30 seconds)
+            3. Launch from your desktop or Start menu
+
+            ### Portable use
+            1. Download **RecipeManager.exe**
+            2. Put it anywhere you like and double-click — that's it
+            3. Your recipes are saved in `Documents\Macleay Recipe Manager\`
+
+            ### Your data is safe across updates
+            Recipes, cookbooks, and photos are stored in your **Documents** folder
+            (`Documents\Macleay Recipe Manager\`), not inside the app directory,
+            so they survive installs, updates, and uninstalls.
+          files: |
+            Macleay Recipe Manager/recipe_scraper/Output/MacleayRecipeManager-Setup.exe
+            Macleay Recipe Manager/recipe_scraper/dist/RecipeManager.exe
+          draft: false
+          prerelease: false
