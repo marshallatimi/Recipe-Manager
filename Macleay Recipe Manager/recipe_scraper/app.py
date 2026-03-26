@@ -294,6 +294,16 @@ def init_db():
             conn.execute("ALTER TABLE meal_recipes ADD COLUMN servings REAL DEFAULT NULL")
         except Exception:
             pass
+        # Indexes for faster list queries
+        for idx_sql in [
+            "CREATE INDEX IF NOT EXISTS idx_recipes_created ON recipes(created_at DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_recipes_title ON recipes(title COLLATE NOCASE)",
+            "CREATE INDEX IF NOT EXISTS idx_recipes_updated ON recipes(updated_at DESC)",
+        ]:
+            try:
+                conn.execute(idx_sql)
+            except Exception:
+                pass
         conn.execute("""
             CREATE TABLE IF NOT EXISTS group_meals (
                 id               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -648,8 +658,9 @@ def _scrape_jsonld_fallback(url):
 
 def _extract_html_generic(html, url):
     """Last-resort: extract recipe-like content from raw HTML using heuristics.
-    Looks for ingredients in <ul> lists and instructions in <ol> lists,
-    guided by class/id names containing 'ingredient', 'instruction', 'direction', 'step'."""
+    Looks for ingredients in <ul>/<ol> lists and instructions in <ol> lists,
+    guided by class/id names containing 'ingredient', 'instruction', 'direction', 'step'.
+    Collects ALL matching sections (not just the first) to handle multi-section recipes."""
 
     def _strip_tags(s):
         return re.sub(r'<[^>]+>', ' ', s).strip()
@@ -668,59 +679,49 @@ def _extract_html_generic(html, url):
         '', html, flags=re.DOTALL | re.IGNORECASE)
 
     def _text(s):
-        return _decode_entities(_strip_tags(s)).strip()
+        return re.sub(r'\s+', ' ', _decode_entities(_strip_tags(s))).strip()
+
+    def _li_items(block):
+        items = re.findall(r'<li[^>]*>(.*?)</li>', block, re.DOTALL | re.IGNORECASE)
+        return [_text(i) for i in items if _text(i)]
+
+    def _p_items(block):
+        items = re.findall(r'<p[^>]*>(.*?)</p>', block, re.DOTALL | re.IGNORECASE)
+        return [_text(i) for i in items if _text(i)]
 
     # Title: first <h1>
     title = None
     h1 = re.search(r'<h1[^>]*>(.*?)</h1>', html_clean, re.DOTALL | re.IGNORECASE)
     if h1:
         title = _text(h1.group(1))
-    # Fallback: <title> tag
     if not title:
         t = re.search(r'<title[^>]*>(.*?)</title>', html_clean, re.DOTALL | re.IGNORECASE)
         if t:
             title = _text(t.group(1))
 
-    # Ingredients: look for a <ul> or <ol> whose class/id suggests ingredients
+    # Ingredients: collect ALL <ul>/<ol>/<div>/<section> with "ingredient" in class/id
     ingredients = []
-    ing_section = re.search(
-        r'<(?:ul|ol)([^>]*(?:class|id)=["\'][^"\']*ingredient[^"\']*["\'][^>]*)>(.*?)</(?:ul|ol)>',
+    ing_blocks = re.findall(
+        r'<(?:ul|ol|div|section)([^>]*(?:class|id)=["\'][^"\']*ingredient[^"\']*["\'][^>]*)>(.*?)</(?:ul|ol|div|section)>',
         html_clean, re.DOTALL | re.IGNORECASE)
-    if ing_section:
-        items = re.findall(r'<li[^>]*>(.*?)</li>', ing_section.group(2), re.DOTALL | re.IGNORECASE)
-        ingredients = [_text(i) for i in items if _text(i)]
-    # Broader fallback: any container whose class/id matches
-    if not ingredients:
-        ing_wrap = re.search(
-            r'<(?:div|section|ul)[^>]*(?:class|id)=["\'][^"\']*ingredient[^"\']*["\'][^>]*>(.*?)</(?:div|section|ul)>',
-            html_clean, re.DOTALL | re.IGNORECASE)
-        if ing_wrap:
-            items = re.findall(r'<li[^>]*>(.*?)</li>', ing_wrap.group(1), re.DOTALL | re.IGNORECASE)
-            if not items:
-                items = re.findall(r'<p[^>]*>(.*?)</p>', ing_wrap.group(1), re.DOTALL | re.IGNORECASE)
-            ingredients = [_text(i) for i in items if _text(i)]
+    for _, block in ing_blocks:
+        items = _li_items(block) or _p_items(block)
+        ingredients.extend(items)
+    # Remove duplicates while preserving order
+    seen = set(); ingredients = [x for x in ingredients if not (x in seen or seen.add(x))]
 
-    # Instructions: look for an <ol> or <ul> whose class/id suggests instructions
+    # Instructions: collect ALL matching sections
     steps = []
     instr_pattern = r'instruction|direction|step|method|preparation'
-    instr_section = re.search(
-        r'<(?:ol|ul)([^>]*(?:class|id)=["\'][^"\']*(?:' + instr_pattern + r')[^"\']*["\'][^>]*)>(.*?)</(?:ol|ul)>',
+    instr_blocks = re.findall(
+        r'<(?:ul|ol|div|section)([^>]*(?:class|id)=["\'][^"\']*(?:' + instr_pattern + r')[^"\']*["\'][^>]*)>(.*?)</(?:ul|ol|div|section)>',
         html_clean, re.DOTALL | re.IGNORECASE)
-    if instr_section:
-        items = re.findall(r'<li[^>]*>(.*?)</li>', instr_section.group(2), re.DOTALL | re.IGNORECASE)
-        steps = [_text(i) for i in items if _text(i)]
-    # Broader fallback
-    if not steps:
-        instr_wrap = re.search(
-            r'<(?:div|section|ol)[^>]*(?:class|id)=["\'][^"\']*(?:' + instr_pattern + r')[^"\']*["\'][^>]*>(.*?)</(?:div|section|ol)>',
-            html_clean, re.DOTALL | re.IGNORECASE)
-        if instr_wrap:
-            items = re.findall(r'<li[^>]*>(.*?)</li>', instr_wrap.group(1), re.DOTALL | re.IGNORECASE)
-            if not items:
-                items = re.findall(r'<p[^>]*>(.*?)</p>', instr_wrap.group(1), re.DOTALL | re.IGNORECASE)
-            steps = [_text(i) for i in items if _text(i)]
+    for _, block in instr_blocks:
+        items = _li_items(block) or _p_items(block)
+        steps.extend(items)
+    seen2 = set(); steps = [x for x in steps if not (x in seen2 or seen2.add(x))]
 
-    # Servings: search visible text for a yield/servings number
+    # Servings
     servings = None
     srv_match = re.search(
         r'(?:serves?|servings?|yield[s]?|makes?)[^\d<]*(\d+(?:\s*[-\u2013]\s*\d+)?(?:\s+\w+)?)',
@@ -813,7 +814,7 @@ def list_recipes():
     # Exclude the image column — base64 images can be hundreds of KB each.
     # The full image is fetched individually when a recipe is opened.
     rows = get_db().execute(
-        "SELECT id,title,servings,servings_num,ingredients,instructions,"
+        "SELECT id,title,servings,servings_num,"
         "ingredient_groups,instruction_groups,total_time,site_name,source_url,"
         "category,categories,notes,view_count,created_at,updated_at,base_recipe"
         " FROM recipes ORDER BY created_at DESC"

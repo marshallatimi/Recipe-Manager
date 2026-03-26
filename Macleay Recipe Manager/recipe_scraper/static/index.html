@@ -494,7 +494,7 @@
     <div class="grid-controls">
       <div class="grid-controls-left">
         <input class="grid-search-input" id="recipe-search-input" type="search"
-          placeholder="🔍 Search recipes…" oninput="_dApplySort()" autocomplete="off">
+          placeholder="🔍 Search recipes…" oninput="onSearchInput()" autocomplete="off">
         <select id="ing-search-select" onchange="setIngSearchMode(this.value)" style="padding:0.3rem 0.55rem;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:0.82rem">
           <option value="title">🔍 By Title</option>
           <option value="ingredient">🧄 By Ingredient</option>
@@ -4312,7 +4312,7 @@ async function confirmShopAdd() {
     const servingsLabel = r.servings
       ? r.servings.replace(/\d+(\.\d+)?/, formatNum(servings))
       : `${formatNum(servings)} servings`;
-    shoppingList.push({id:r.id, title:r.title, servingsLabel, ingredients:scaledIngredients});
+    shoppingList.push({id:r.id, title:r.title, servingsLabel, ingredients:scaledIngredients, origServings, currentServings: servings});
   });
 
   saveShoppingListToStorage();
@@ -4344,6 +4344,29 @@ async function initShoppingTab() {
 
 function removeFromShoppingList(idx) {
   shoppingList.splice(idx, 1);
+  saveShoppingListToStorage();
+  updateShoppingCount();
+  renderShoppingList();
+}
+
+function rescaleShoppingEntry(idx, newServingsStr) {
+  const newServings = parseFloat(newServingsStr);
+  if (!newServings || newServings <= 0) return;
+  const entry = shoppingList[idx];
+  if (!entry) return;
+  const r = savedRecipes.find(r => r.id === entry.id);
+  if (!r) { showAlert("Recipe not found — cannot re-scale."); return; }
+  const origServ = entry.origServings || r.servings_num || parseServingsNumJS(r.servings) || newServings;
+  const factor = newServings / origServ;
+  const ig = r.ingredient_groups || [{purpose:null, ingredients: r.ingredients||[]}];
+  entry.ingredients = ig.flatMap(g =>
+    (g.ingredients||[]).map(ing => Math.abs(factor-1)>0.01 ? scaleIngredient(ing, factor) : ing)
+  );
+  entry.currentServings = newServings;
+  entry.origServings = origServ;
+  entry.servingsLabel = r.servings
+    ? r.servings.replace(/\d+(\.\d+)?/, formatNum(newServings))
+    : `${formatNum(newServings)} servings`;
   saveShoppingListToStorage();
   updateShoppingCount();
   renderShoppingList();
@@ -4586,14 +4609,24 @@ function renderShoppingList() {
     return;
   }
 
-  content.innerHTML = shoppingList.map((entry, idx) => `
+  content.innerHTML = shoppingList.map((entry, idx) => {
+    const curServ = entry.currentServings || entry.origServings || "";
+    return `
     <div class="shop-entry">
-      <div>
+      <div style="flex:1;min-width:0">
         <div class="shop-entry-title">${esc(entry.title)}</div>
-        <div class="shop-entry-meta">${esc(entry.servingsLabel)} &nbsp;·&nbsp; ${entry.ingredients.length} ingredient${entry.ingredients.length===1?"":"s"}</div>
+        <div class="shop-entry-meta" style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap">
+          <span>Servings:</span>
+          <input type="number" min="0.5" step="0.5" value="${esc(String(curServ))}"
+            style="width:4.5rem;padding:0.1rem 0.3rem;font-size:0.82rem;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text)"
+            onchange="rescaleShoppingEntry(${idx}, this.value)"
+            title="Change serving size to re-scale ingredients"/>
+          <span style="color:var(--muted)">&nbsp;·&nbsp; ${entry.ingredients.length} ingredient${entry.ingredients.length===1?"":"s"}</span>
+        </div>
       </div>
-      <button class="btn btn-danger" style="padding:0.3rem 0.75rem;font-size:0.82rem" onclick="removeFromShoppingList(${idx})">Remove</button>
-    </div>`).join("") +
+      <button class="btn btn-danger" style="padding:0.3rem 0.75rem;font-size:0.82rem;flex-shrink:0" onclick="removeFromShoppingList(${idx})">Remove</button>
+    </div>`;
+  }).join("") +
     `<p class="shop-summary">${totalItems} total ingredient${totalItems===1?"":"s"} across ${shoppingList.length} recipe${shoppingList.length===1?"":"s"}</p>`;
 }
 
@@ -4604,13 +4637,18 @@ function parseIngForCombine(text) {
   // NP supports plain numbers, fractions, mixed numbers, and ranges like "1-2" or "1 to 2"
   const NP = '(?:(?:\\d+\\s+)?\\d+\\/\\d+|\\d+(?:\\.\\d+)?(?:\\s*[-\u2013]\\s*(?:\\d+\\s+)?\\d+(?:\\/\\d+)?(?:\\.\\d+)?|\\s+to\\s+\\d+(?:\\.\\d+)?)?)';
   const UL = 'tsps?|teaspoons?|tbsps?|tbls?|tablespoons?|fl\\.?\\s*ozs?|cups?|pints?|pts?|quarts?|qts?|gallons?|gals?|ozs?|ounces?|lbs?|pounds?|kgs?|kilograms?|grams?|g(?=\\b)';
-  const m = text.match(new RegExp(`^(${NP})\\s*(${UL})?[\\s]*(.+)$`, 'i'));
+  const QU_RE = new RegExp(`^(${NP})\\s*(${UL})?\\s*(.+)$`, 'i');
+  const m = text.match(QU_RE);
   if (m) {
-    // For ranges like "1-2", take the first number for numeric comparison
     const firstNum = parseFraction(m[1].split(/[-\u2013]/)[0].trim());
     if (!isNaN(firstNum)) {
       const unit = m[2] ? m[2].trim().toLowerCase().replace(/\s+/g,'') : null;
-      const name = m[3].trim().replace(/^[,\s]+/, '');
+      // Recursively strip additional leading qty+unit pairs (e.g. "1 cup 2 tsp Salt" → name="Salt")
+      let name = m[3].trim().replace(/^[,\s]+/, '');
+      let nm;
+      while ((nm = name.match(QU_RE)) && !isNaN(parseFraction(nm[1].split(/[-\u2013]/)[0].trim()))) {
+        name = nm[3].trim().replace(/^[,\s]+/, '');
+      }
       return { qty: firstNum, unit, name, original: text };
     }
   }
@@ -5672,6 +5710,11 @@ function closeChangelogPanel(e) {
 function _debounce(fn, ms) {
   let t;
   return function(...args) { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), ms); };
+}
+let _searchDebounce = null;
+function onSearchInput() {
+  clearTimeout(_searchDebounce);
+  _searchDebounce = setTimeout(renderGrid, 150);
 }
 const _dApplySort             = _debounce(() => applySort(),             300);
 const _dRenderShopBrowser     = _debounce(() => renderShopBrowser(),     300);
