@@ -4639,6 +4639,8 @@ function renderShoppingList() {
 
 function parseIngForCombine(text) {
   text = text.replace(/^[\u25A1\u25A2\u25FB\u25FC\u2610\u2611\u2612\u2713\u2714\s]+/, '').trim();
+  // Strip a single leading dash or en-dash (AccuChef sub-item prefix like "- 1 cup Salt")
+  text = text.replace(/^[-–]\s+/, '').trim();
   // NP supports plain numbers, fractions, mixed numbers, and ranges like "1-2" or "1 to 2"
   const NP = '(?:(?:\\d+\\s+)?\\d+\\/\\d+|\\d+(?:\\.\\d+)?(?:\\s*[-\u2013]\\s*(?:\\d+\\s+)?\\d+(?:\\/\\d+)?(?:\\.\\d+)?|\\s+to\\s+\\d+(?:\\.\\d+)?)?)';
   const UL = 'tsps?|teaspoons?|tbsps?|tbls?|tablespoons?|fl\\.?\\s*ozs?|cups?|pints?|pts?|quarts?|qts?|gallons?|gals?|ozs?|ounces?|lbs?|pounds?|kgs?|kilograms?|grams?|g(?=\\b)';
@@ -4808,7 +4810,8 @@ function formatIngNameFirst(text) {
   const NP = '(?:(?:\\d+\\s+)?\\d+\\/\\d+|\\d+(?:\\.\\d+)?(?:\\s*[-\u2013]\\s*\\d+(?:\\.\\d+)?|\\s+to\\s+\\d+(?:\\.\\d+)?)?)';
   const UL = 'tsps?|teaspoons?|tbsps?|tbls?|tablespoons?|fl\\.?\\s*ozs?|cups?|pints?|pts?|quarts?|qts?|gallons?|gals?|ozs?|ounces?|lbs?|pounds?|kgs?|kilograms?|grams?|g(?=\\b)|mls?|l(?=\\b)';
   const re = new RegExp(`^(${NP})(?:\\s*(${UL}))?\\s+(.+)$`, 'i');
-  let remaining = text.trim();
+  // Strip leading single dash prefix (AccuChef sub-items like "- 1 cup Salt")
+  let remaining = text.trim().replace(/^[-–]\s+/, '');
   let amountParts = [];
   while (true) {
     const m = remaining.match(re);

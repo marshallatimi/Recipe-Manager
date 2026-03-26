@@ -2401,7 +2401,9 @@ def parse_accuchef_csv(csv_path):
                     purpose = re.sub(r'^[-=\s]+|[-=\s]+$', '', ing).strip() or None
                     current_group = {"purpose": purpose, "ingredients": []}
                 else:
-                    current_group["ingredients"].append(ing)
+                    # Strip leading single-dash prefix (AccuChef sub-item style "- 1 cup Salt")
+                    clean_ing = re.sub(r'^-\s+', '', ing).strip() or ing
+                    current_group["ingredients"].append(clean_ing)
             if current_group["ingredients"] or not ing_groups:
                 ing_groups.append(current_group)
             step_groups = [{"purpose": None, "steps": [instructions_raw]}] if instructions_raw else [{"purpose": None, "steps": []}]
