@@ -79,6 +79,16 @@
     html { font-size: calc(16px * var(--font-scale)); }
     body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
+    /* ── Custom context menu ── */
+    #ctx-menu { position:fixed; z-index:9999; background:var(--card); border:1px solid var(--border);
+      border-radius:8px; box-shadow:0 4px 18px rgba(0,0,0,0.18); min-width:160px; padding:0.3rem 0; display:none; }
+    #ctx-menu button { display:block; width:100%; text-align:left; padding:0.45rem 1rem;
+      border:none; background:none; cursor:pointer; font-size:0.88rem; color:var(--text);
+      font-family:inherit; white-space:nowrap; }
+    #ctx-menu button:hover { background:var(--bg); }
+    #ctx-menu button:disabled { color:var(--muted); cursor:default; }
+    #ctx-menu .ctx-sep { border:none; border-top:1px solid var(--border); margin:0.2rem 0; }
+
     header { background: var(--header-bg); color: #fff; position: sticky; top: 0; z-index: 200; }
     .header-top { display: flex; align-items: center; gap: 0.35rem; padding: clamp(0.28rem,0.6vw,0.45rem) clamp(0.5rem,1.5vw,1rem); flex-wrap: wrap; }
     .tab-btn { padding: clamp(0.28rem,0.7vw,0.42rem) clamp(0.45rem,1.3vw,0.95rem); border: 2px solid rgba(255,255,255,0.5); border-radius: 6px; background: transparent; color: #fff; font-size: clamp(0.7rem,1.4vw,0.88rem); font-weight: 600; cursor: pointer; transition: background 0.15s; white-space: nowrap; }
@@ -157,7 +167,7 @@
     .search-bar button:disabled { background:#bbb; cursor:not-allowed; }
 
     .status { min-height:1.4rem; font-size:0.92rem; color:var(--muted); margin-bottom:0.5rem; }
-    .status.error { color:var(--red); font-weight:600; }
+    .status.error { color: #ff9080; font-weight:600; }
 
     .recipe-card { background:var(--card); border-radius:12px; box-shadow:0 2px 16px rgba(0,0,0,0.08); overflow:hidden; }
     .recipe-card img.hero { width:100%; max-height:300px; object-fit:cover; display:block; }
@@ -699,8 +709,13 @@
           <input type="url" id="cr-source-url" placeholder="https://example.com/recipe" style="width:100%;padding:0.55rem 0.7rem;border:2px solid var(--border);border-radius:7px;font-size:0.9rem;outline:none;font-family:inherit"/>
         </div>
         <div style="flex:1;min-width:180px">
-          <label style="font-size:0.8rem;font-weight:700;color:var(--muted);display:block;margin-bottom:0.3rem;text-transform:uppercase;letter-spacing:0.5px">Image URL <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
-          <input type="text" id="cr-image" placeholder="https://example.com/photo.jpg" style="width:100%;padding:0.55rem 0.7rem;border:2px solid var(--border);border-radius:7px;font-size:0.9rem;outline:none;font-family:inherit"/>
+          <label style="font-size:0.8rem;font-weight:700;color:var(--muted);display:block;margin-bottom:0.3rem;text-transform:uppercase;letter-spacing:0.5px">Image <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
+          <input type="text" id="cr-image" placeholder="Paste image URL…" style="width:100%;padding:0.55rem 0.7rem;border:2px solid var(--border);border-radius:7px;font-size:0.9rem;outline:none;font-family:inherit;margin-bottom:0.35rem"/>
+          <div style="display:flex;align-items:center;gap:0.5rem">
+            <input type="file" id="cr-image-file" accept="image/*" style="display:none" onchange="handleCRImageFile(this)">
+            <button class="btn btn-ghost" style="font-size:0.8rem;padding:0.3rem 0.7rem" onclick="document.getElementById('cr-image-file').click();event.preventDefault()">📁 Upload photo</button>
+            <span id="cr-image-file-name" style="font-size:0.78rem;color:var(--muted)"></span>
+          </div>
         </div>
       </div>
     </div>
@@ -872,6 +887,15 @@
       <button class="btn btn-ghost" onclick="closeSettingsPanel()">Close</button>
     </div>
   </div>
+</div>
+
+<!-- Custom context menu -->
+<div id="ctx-menu">
+  <button id="ctx-cut"       onclick="_ctxCut()">Cut</button>
+  <button id="ctx-copy"      onclick="_ctxCopy()">Copy</button>
+  <button id="ctx-paste"     onclick="_ctxPaste()">Paste</button>
+  <hr class="ctx-sep">
+  <button id="ctx-select-all" onclick="_ctxSelectAll()">Select All</button>
 </div>
 
 <!-- Update Available Banner (bottom-centre toast) -->
@@ -1321,8 +1345,20 @@ async function patchRecipe() {
   if (idx !== -1) savedRecipes[idx] = {...selectedRecipe};
   updateCatFilter();
   showToast();
-  // Reload meals to pick up recipe changes
+  // Reload meals and group meals to pick up recipe changes
   try { savedMeals = await (await fetch("/meals")).json(); } catch {}
+  try { savedGroupMeals = await (await fetch("/group-meals")).json(); } catch {}
+  // Refresh shopping list if it contains this recipe
+  if (shoppingList.some(e => e.recipe_id === selectedRecipe.id)) {
+    const updated = shoppingList.map(e => {
+      if (e.recipe_id !== selectedRecipe.id) return e;
+      const factor = e.servings_factor || 1;
+      const igs = selectedRecipe.ingredient_groups || [{purpose:null, ingredients:selectedRecipe.ingredients||[]}];
+      return {...e, ingredients: igs.flatMap(g => g.ingredients || [])};
+    });
+    shoppingList = updated;
+    renderShoppingList();
+  }
 }
 
 // ── Category tag editor ───────────────────────────────────────
@@ -1581,13 +1617,22 @@ function makeInlineInput(el, currentVal, onSave, opts={}) {
   inp.className = opts.textarea ? "inline-textarea" : ("inline-input" + (opts.cls ? " "+opts.cls : ""));
   inp.value = currentVal;
   if (opts.stretch) { inp.style.flex = "1"; inp.style.minWidth = "0"; inp.style.width = "100%"; }
+  // Disable dragging on the parent drag-row while editing so text selection works
+  const dragRow = el.closest('[draggable="true"]');
+  if (dragRow) dragRow.setAttribute("draggable", "false");
   el.replaceWith(inp);
   inp.focus(); inp.select();
-  const save = () => { onSave(inp.value.trim()); };
+  const save = () => {
+    if (dragRow) dragRow.setAttribute("draggable", "true");
+    onSave(inp.value.trim());
+  };
   inp.addEventListener("blur", save);
   inp.addEventListener("keydown", e => {
     if (!opts.textarea && e.key === "Enter") { e.preventDefault(); inp.blur(); }
-    if (e.key === "Escape") renderSavedDetail();
+    if (e.key === "Escape") {
+      if (dragRow) dragRow.setAttribute("draggable", "true");
+      renderSavedDetail();
+    }
   });
 }
 
@@ -2415,6 +2460,11 @@ function openCreateRecipeModal() {
   });
   document.getElementById("cr-ingredients").value = "";
   document.getElementById("cr-instructions").value = "";
+  _crImageData = null;
+  const fileInput = document.getElementById("cr-image-file");
+  if (fileInput) fileInput.value = "";
+  const nameEl = document.getElementById("cr-image-file-name");
+  if (nameEl) nameEl.textContent = "";
   document.getElementById("create-recipe-modal-backdrop").hidden = false;
 }
 
@@ -2423,13 +2473,28 @@ function closeCreateRecipeModal(e) {
     document.getElementById("create-recipe-modal-backdrop").hidden = true;
 }
 
+let _crImageData = null; // base64 data-URI from uploaded file
+
+function handleCRImageFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const nameEl = document.getElementById("cr-image-file-name");
+  if (nameEl) nameEl.textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = e => {
+    _crImageData = e.target.result; // data:image/...;base64,...
+    document.getElementById("cr-image").value = ""; // clear URL field if file chosen
+  };
+  reader.readAsDataURL(file);
+}
+
 async function submitCreateRecipe() {
   const title = document.getElementById("cr-title").value.trim();
   if (!title) { showAlert("Please enter a recipe title."); return; }
   const servings  = document.getElementById("cr-servings").value.trim();
   const cats      = document.getElementById("cr-category").value.split(",").map(s=>s.trim()).filter(Boolean).slice(0,5);
   const sourceUrl = document.getElementById("cr-source-url").value.trim();
-  const imageUrl  = document.getElementById("cr-image").value.trim();
+  const imageUrl  = _crImageData || document.getElementById("cr-image").value.trim();
   const ingredients = document.getElementById("cr-ingredients").value
     .split("\n").map(l => l.trim()).filter(Boolean);
   const steps = document.getElementById("cr-instructions").value
@@ -2823,16 +2888,29 @@ async function showBackupRestore() {
       wrap.innerHTML = `<div style="padding:0.5rem;font-size:0.82rem;color:var(--muted)">No backups found.</div>`;
       return;
     }
-    wrap.innerHTML = backups.map(b => `
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:0.35rem 0.6rem;border-bottom:1px solid var(--border)">
-        <span style="font-size:0.8rem;color:var(--text)">${esc(b.filename.replace(/\.cookbook$/, ""))}</span>
-        <button class="btn btn-ghost" style="font-size:0.75rem;padding:0.2rem 0.5rem" onclick="restoreBackup('${b.path.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}','${esc(b.filename)}')">Restore</button>
-      </div>`).join("");
+    // Group by cookbook name for clarity
+    const grouped = {};
+    backups.forEach(b => {
+      const cb = b.cookbook_name || b.filename.replace(/\.cookbook$/, "");
+      if (!grouped[cb]) grouped[cb] = [];
+      grouped[cb].push(b);
+    });
+    wrap.innerHTML = Object.entries(grouped).map(([cb, items]) => `
+      <div style="padding:0.3rem 0.6rem 0.1rem;font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;background:var(--bg)">${esc(cb)}</div>
+      ${items.map(b => {
+        const safePath = b.path.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        const label = b.filename.replace(/\.cookbook$/, "").replace(/^.*?_(\d{4}-\d{2}-\d{2}(?:_\d{2}-\d{2}-\d{2})?)$/, '$1').replace(/_/g, ' ');
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.3rem 0.6rem;border-bottom:1px solid var(--border)">
+          <span style="font-size:0.8rem;color:var(--text)">${esc(label)}</span>
+          <button class="btn btn-ghost" style="font-size:0.75rem;padding:0.2rem 0.5rem" onclick="restoreBackup('${safePath}','${esc(b.filename)}','${esc(cb)}')">Restore</button>
+        </div>`;
+      }).join("")}`).join("");
   } catch { wrap.innerHTML = `<div style="padding:0.5rem;font-size:0.82rem;color:var(--red)">Failed to load backups.</div>`; }
 }
 
-async function restoreBackup(path, filename) {
-  const ok = await showConfirm(`Restore from "${filename}"? This will replace ALL current recipes and cookbooks.`, "Restore", "btn-danger");
+async function restoreBackup(path, filename, cookbookName) {
+  const cbLabel = cookbookName || filename;
+  const ok = await showConfirm(`Restore "${filename}" to cookbook "${cbLabel}"?\nThis will overwrite that cookbook's current data.`, "Restore", "btn-danger");
   if (!ok) return;
   try {
     const res = await fetch("/backup/restore", {
@@ -2841,7 +2919,7 @@ async function restoreBackup(path, filename) {
     });
     const data = await res.json();
     if (data.ok) {
-      showToast("Restored! Reloading…");
+      showToast(`Restored "${data.restored_to}"! Reloading…`);
       setTimeout(() => location.reload(), 1200);
     } else {
       showAlert("Restore failed: " + (data.error || "Unknown error"));
@@ -4374,8 +4452,8 @@ function renderShopSettingsList() {
   el.innerHTML = items.map(({key, cat: current}) => {
     const opts = SHOP_CATEGORY_NAMES.map(c => `<option value="${esc(c)}"${current===c?" selected":""}>${esc(c)}</option>`).join("");
     const safeKey = key.replace(/\\/g,"\\\\").replace(/'/g,"\\'");
-    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.38rem 0.7rem;border-bottom:1px solid var(--border)">
-      <span style="font-size:0.85rem;flex:1;margin-right:0.5rem">${esc(key)}</span>
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.38rem 0.7rem;border-bottom:1px solid var(--border);gap:0.4rem">
+      <span style="font-size:0.85rem;flex:1;cursor:pointer;border-radius:4px;padding:0.1rem 0.25rem" title="Click to rename" onclick="renameShopIngredient('${safeKey}', this)">${esc(key)}</span>
       <select onchange="_shopSettings.ingredient_categories['${safeKey}']=this.value"
         style="padding:0.2rem 0.3rem;border:1px solid var(--border);border-radius:4px;background:var(--card);color:var(--text);font-size:0.78rem">
         ${opts}
@@ -4412,6 +4490,50 @@ async function saveShopSettings() {
 function closeShopSettings(e) {
   if (!e || e.target === document.getElementById("shop-settings-backdrop"))
     document.getElementById("shop-settings-backdrop").hidden = true;
+}
+
+function renameShopIngredient(oldKey, spanEl) {
+  const inp = document.createElement("input");
+  inp.className = "inline-input";
+  inp.value = oldKey;
+  inp.style.flex = "1";
+  inp.style.fontSize = "0.85rem";
+  inp.style.minWidth = "0";
+  spanEl.replaceWith(inp);
+  inp.focus(); inp.select();
+  const finish = async () => {
+    const newName = inp.value.trim();
+    if (!newName || newName.toLowerCase() === oldKey.toLowerCase()) {
+      renderShopSettingsList(); return;
+    }
+    const res = await fetch("/shopping/rename-ingredient", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({old_key: oldKey, new_name: newName})
+    });
+    const data = await res.json();
+    if (data.ok) {
+      // Update in-memory key
+      const newKey = newName.toLowerCase().replace(/\s+/g,' ').trim()
+        .replace(/ies$/, 'y').replace(/([^s])s$/, '$1');
+      const oldCat = _shopSettings.ingredient_categories[oldKey];
+      if (oldCat) {
+        _shopSettings.ingredient_categories[newKey] = oldCat;
+        delete _shopSettings.ingredient_categories[oldKey];
+      }
+      // Reload ingredient list and recipes
+      savedRecipes = await (await fetch("/recipes")).json();
+      await showShopSettings();
+      showToast(`Renamed "${oldKey}" → "${newName}" in ${data.updated_recipes} recipe(s)`);
+    } else {
+      showAlert("Rename failed: " + (data.error || "Unknown error"));
+      renderShopSettingsList();
+    }
+  };
+  inp.addEventListener("blur", finish);
+  inp.addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); inp.blur(); }
+    if (e.key === "Escape") renderShopSettingsList();
+  });
 }
 
 function renderShoppingList() {
@@ -4606,7 +4728,8 @@ function buildMealRecipesHtml(recipes, factors) {
 
 function formatIngNameFirst(text) {
   // Recursively strip ALL leading qty+unit pairs so "2 cups 1 tbsp Basil" → "Basil — 2 cups 1 tbsp"
-  const NP = '(?:(?:\\d+\\s+)?\\d+\\/\\d+|\\d+(?:\\.\\d+)?)';
+  // NP also handles ranges like "1 - 2" or "1-2" or "1 to 2"
+  const NP = '(?:(?:\\d+\\s+)?\\d+\\/\\d+|\\d+(?:\\.\\d+)?(?:\\s*[-\u2013]\\s*\\d+(?:\\.\\d+)?|\\s+to\\s+\\d+(?:\\.\\d+)?)?)';
   const UL = 'tsps?|teaspoons?|tbsps?|tbls?|tablespoons?|fl\\.?\\s*ozs?|cups?|pints?|pts?|quarts?|qts?|gallons?|gals?|ozs?|ounces?|lbs?|pounds?|kgs?|kilograms?|grams?|g(?=\\b)|mls?|l(?=\\b)';
   const re = new RegExp(`^(${NP})(?:\\s*(${UL}))?\\s+(.+)$`, 'i');
   let remaining = text.trim();
@@ -5305,20 +5428,77 @@ async function exportGroupFolderPdf() {
   }
 }
 
-// ── Window focus reload (shared cookbook on network drives) ────
+// ── Right-click context menu ───────────────────────────────────
+let _ctxTarget = null;
+document.addEventListener("contextmenu", e => {
+  const menu = document.getElementById("ctx-menu");
+  if (!menu) return;
+  _ctxTarget = e.target;
+  const isEditable = _ctxTarget.matches("input, textarea, [contenteditable]");
+  const hasSelection = window.getSelection && window.getSelection().toString().length > 0;
+  // Only show for editable fields or when text is selected
+  if (!isEditable && !hasSelection) return;
+  e.preventDefault();
+  document.getElementById("ctx-cut").disabled  = !isEditable;
+  document.getElementById("ctx-paste").disabled = !isEditable;
+  document.getElementById("ctx-select-all").disabled = !isEditable;
+  // Position
+  menu.style.display = "block";
+  const mw = menu.offsetWidth, mh = menu.offsetHeight;
+  const x = Math.min(e.clientX, window.innerWidth  - mw - 4);
+  const y = Math.min(e.clientY, window.innerHeight - mh - 4);
+  menu.style.left = x + "px";
+  menu.style.top  = y + "px";
+});
+document.addEventListener("click",    () => { const m = document.getElementById("ctx-menu"); if (m) m.style.display = "none"; });
+document.addEventListener("scroll",   () => { const m = document.getElementById("ctx-menu"); if (m) m.style.display = "none"; }, true);
+document.addEventListener("keydown",  e => { if (e.key === "Escape") { const m = document.getElementById("ctx-menu"); if (m) m.style.display = "none"; }});
+function _ctxCut()       { if (_ctxTarget) { _ctxTarget.focus(); document.execCommand("cut");  } }
+function _ctxCopy()      { document.execCommand("copy"); }
+function _ctxPaste()     { if (_ctxTarget) { _ctxTarget.focus(); document.execCommand("paste"); } }
+function _ctxSelectAll() { if (_ctxTarget) { _ctxTarget.focus(); _ctxTarget.select ? _ctxTarget.select() : document.execCommand("selectAll"); } }
+
+// ── Window focus reload + background polling (shared cookbook / multi-user) ───
 let _lastFocusReload = 0;
-window.addEventListener("focus", async () => {
-  const now = Date.now();
-  if (now - _lastFocusReload < 30000) return; // max once per 30s
-  _lastFocusReload = now;
+
+async function _reloadSharedData() {
   try {
-    savedRecipes = await (await fetch("/recipes")).json();
+    const newRecipes = await (await fetch("/recipes")).json();
+    // Conflict detection: if a recipe we're viewing was changed remotely, warn once
+    if (selectedRecipe) {
+      const remote = newRecipes.find(r => r.id === selectedRecipe.id);
+      if (remote && remote.updated_at && selectedRecipe.updated_at &&
+          remote.updated_at !== selectedRecipe.updated_at &&
+          !_remoteChangeWarned) {
+        _remoteChangeWarned = true;
+        showToast("⚠️ This recipe was updated by another user — reloading…");
+        setTimeout(() => openRecipe(selectedRecipe.id), 1200);
+      }
+    }
+    savedRecipes = newRecipes;
     savedMeals = await (await fetch("/meals")).json();
+    savedGroupMeals = await (await fetch("/group-meals")).json();
     updateCatFilter();
     if (document.getElementById("tab-saved") && !document.getElementById("tab-saved").hidden) renderGrid();
     if (document.getElementById("tab-meals") && !document.getElementById("tab-meals").hidden) renderMealGrid();
+    if (document.getElementById("tab-cookbooks") && !document.getElementById("tab-cookbooks").hidden) initCookbooksTab();
   } catch {}
+}
+let _remoteChangeWarned = false;
+
+window.addEventListener("focus", async () => {
+  const now = Date.now();
+  if (now - _lastFocusReload < 15000) return; // max once per 15s on focus
+  _lastFocusReload = now;
+  _remoteChangeWarned = false;
+  await _reloadSharedData();
 });
+
+// Background poll every 2 minutes for multi-user environments
+setInterval(async () => {
+  _remoteChangeWarned = false;
+  await _reloadSharedData();
+}, 120000);
 
 function doPrint(fullHtml) {
   // Inject content into the current window and call window.print().
@@ -5349,6 +5529,23 @@ function doPrint(fullHtml) {
 }
 
 const CHANGELOG = [
+  {
+    version: "v1.2.15",
+    notes: [
+      "Backups now cover every cookbook, named per-cookbook; restore only affects the cookbook it was taken from",
+      "Recipe scraper now falls back to schema.org JSON-LD extraction for unsupported websites",
+      "Right-click context menu added (copy, paste, cut, select all) for text fields",
+      "New recipe form now supports uploading a photo directly as well as pasting a URL",
+      "Shopping categories: click any ingredient name to rename it — updates every recipe automatically",
+      "AccuChef CSV import now brings in the Notes field",
+      "Range quantities like '1 - 2 tbsp' now format correctly as 'milk — 1 - 2 tbsp'",
+      "Dragging ingredients/steps is disabled while you are editing the text inside them",
+      "Meals, group meals, and shopping list now update automatically when a recipe is edited",
+      "Background polling every 2 minutes keeps shared cookbooks in sync; warns if another user edited the same recipe",
+      "Deleted .cookbook files are automatically removed from the Cookbooks tab",
+      "Failed scrape error text now shows in salmon colour",
+    ]
+  },
   {
     version: "v1.2.9",
     notes: [

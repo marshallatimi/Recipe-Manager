@@ -126,9 +126,17 @@ def get_cookbooks_list():
             _add_book(os.path.join(COOKBOOKS_DIR, fname))
 
     s = load_settings()
+    linked_valid = []
+    settings_changed = False
     for lpath in s.get("linkedCookbooks", []):
         if os.path.exists(lpath):
             _add_book(lpath, linked=True)
+            linked_valid.append(lpath)
+        else:
+            settings_changed = True  # stale entry — prune it
+    if settings_changed:
+        s["linkedCookbooks"] = linked_valid
+        save_settings_to_file(s)
 
     books.sort(key=lambda b: b["name"].lower())
     _cookbooks_cache["data"] = books
@@ -511,6 +519,120 @@ def index():
     return send_from_directory("static", "index.html")
 
 
+def _parse_iso_duration(val):
+    """Convert ISO 8601 duration like PT1H30M to human string."""
+    m = re.match(r'^PT(?:(\d+)H)?(?:(\d+)M)?', str(val))
+    if not m:
+        return None
+    parts = []
+    if m.group(1): parts.append(f"{m.group(1)} hr")
+    if m.group(2): parts.append(f"{m.group(2)} min")
+    return ' '.join(parts) or None
+
+
+def _scrape_jsonld_fallback(url):
+    """Fetch a URL and extract a recipe from JSON-LD schema.org/Recipe data."""
+    try:
+        req = urllib.request.Request(url, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        })
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        with urllib.request.urlopen(req, context=ctx, timeout=12) as resp:
+            html = resp.read().decode('utf-8', errors='replace')
+    except Exception:
+        return None
+
+    # Find all JSON-LD blocks
+    for raw in re.finditer(
+            r'<script[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+            html, re.DOTALL | re.IGNORECASE):
+        try:
+            data = json.loads(raw.group(1))
+        except Exception:
+            continue
+        # data may be a dict or a list; also handle @graph
+        items = []
+        if isinstance(data, list):
+            items = data
+        elif isinstance(data, dict):
+            items = data.get('@graph', [data])
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            t = item.get('@type', '')
+            types = t if isinstance(t, list) else [t]
+            if not any('recipe' in str(x).lower() for x in types):
+                continue
+            # Parse ingredients
+            raw_ings = item.get('recipeIngredient', [])
+            if not isinstance(raw_ings, list):
+                raw_ings = []
+            ingredients = [clean_ingredient(str(i)) for i in raw_ings if i]
+            ingredient_groups = [{"purpose": None, "ingredients": ingredients}]
+            # Parse instructions
+            raw_steps_val = item.get('recipeInstructions', [])
+            steps = []
+            if isinstance(raw_steps_val, str):
+                steps = [s.strip() for s in raw_steps_val.split('\n') if s.strip()]
+            elif isinstance(raw_steps_val, list):
+                for s in raw_steps_val:
+                    if isinstance(s, str):
+                        steps.append(s.strip())
+                    elif isinstance(s, dict):
+                        if s.get('@type') == 'HowToSection':
+                            for sub in s.get('itemListElement', []):
+                                text = sub.get('text', '') if isinstance(sub, dict) else str(sub)
+                                if text.strip(): steps.append(text.strip())
+                        else:
+                            text = s.get('text', '') or s.get('name', '')
+                            if text.strip(): steps.append(text.strip())
+            instruction_groups = parse_instruction_groups(steps)
+            # Servings
+            srv = item.get('recipeYield', '') or ''
+            if isinstance(srv, list): srv = srv[0] if srv else ''
+            servings = str(srv).strip()
+            # Time
+            total_time = None
+            for tf in ('totalTime', 'cookTime', 'prepTime'):
+                tv = item.get(tf)
+                if tv:
+                    total_time = _parse_iso_duration(tv)
+                    if total_time: break
+            # Image
+            img_field = item.get('image')
+            image = None
+            if isinstance(img_field, str): image = img_field
+            elif isinstance(img_field, list) and img_field:
+                first = img_field[0]
+                image = first.get('url', '') if isinstance(first, dict) else str(first)
+            elif isinstance(img_field, dict): image = img_field.get('url', '')
+            # Site name
+            try:
+                from urllib.parse import urlparse as _up
+                domain = _up(url).netloc.replace('www.', '')
+            except Exception:
+                domain = ''
+            title = str(item.get('name', '') or '').strip()
+            if not title and not ingredients:
+                continue
+            return {
+                "title": title,
+                "servings": servings,
+                "servings_num": parse_servings_num(servings),
+                "ingredients": ingredients,
+                "instructions": flatten_groups(instruction_groups, "steps"),
+                "ingredient_groups": ingredient_groups,
+                "instruction_groups": instruction_groups,
+                "image": image,
+                "total_time": total_time,
+                "site_name": domain,
+                "source_url": url,
+            }
+    return None
+
+
 @app.route("/scrape", methods=["POST"])
 def scrape():
     data = request.get_json()
@@ -519,6 +641,9 @@ def scrape():
         return jsonify({"error": "No URL provided"}), 400
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
+
+    # Try the library first
+    library_error = None
     try:
         scraper = scrape_me(url)
         servings = safe_call(scraper.yields)
@@ -537,11 +662,22 @@ def scrape():
             "site_name": safe_call(scraper.site_name),
             "source_url": url,
         }
-        if not recipe["title"] and not recipe["ingredients"]:
-            return jsonify({"error": "Could not extract a recipe from this page."}), 422
-        return jsonify(recipe)
+        if recipe["title"] or recipe["ingredients"]:
+            return jsonify(recipe)
+        # Library returned empty — fall through to JSON-LD
     except Exception as e:
-        return jsonify({"error": f"Failed to scrape recipe: {str(e)}"}), 500
+        library_error = str(e)
+
+    # Fallback: parse JSON-LD schema.org/Recipe from raw HTML
+    try:
+        fallback = _scrape_jsonld_fallback(url)
+        if fallback and (fallback.get("title") or fallback.get("ingredients")):
+            return jsonify(fallback)
+    except Exception:
+        pass
+
+    msg = library_error or "Could not extract a recipe from this page."
+    return jsonify({"error": f"Failed to scrape recipe: {msg}"}), 500
 
 
 @app.route("/recipes", methods=["GET"])
@@ -1716,6 +1852,76 @@ def save_shopping_settings():
     return jsonify({"ok": True})
 
 
+@app.route("/shopping/rename-ingredient", methods=["POST"])
+def rename_shopping_ingredient():
+    """Rename an ingredient key across ALL recipes in the active cookbook.
+    Replaces just the name portion, preserving quantity and unit prefix."""
+    data = request.get_json() or {}
+    old_key = (data.get("old_key") or "").strip().lower()
+    new_name = (data.get("new_name") or "").strip()
+    if not old_key or not new_name:
+        return jsonify({"error": "old_key and new_name required"}), 400
+
+    # Regex to parse qty+unit prefix from an ingredient string
+    NP = r'(?:(?:\d+\s+)?\d+\/\d+|\d+(?:\.\d+)?)'
+    UL = (r'tsps?|teaspoons?|tbsps?|tbls?|tablespoons?|fl\.?\s*ozs?|cups?|pints?|pts?|'
+          r'quarts?|qts?|gallons?|gals?|ozs?|ounces?|lbs?|pounds?|kgs?|kilograms?|'
+          r'grams?|g(?=\b)|mls?|l(?=\b)')
+    ING_RE = re.compile(rf'^({NP})(?:\s+({UL}))?\s+(.+)$', re.IGNORECASE)
+
+    def _name_key(text):
+        """Normalize ingredient name for comparison (mirrors JS ingNameKey)."""
+        # Strip qty+unit prefix
+        m = ING_RE.match(text.strip())
+        name = m.group(3).strip() if m else text.strip()
+        key = name.lower()
+        key = re.sub(r'\(.*?\)', '', key)
+        key = re.sub(r',.*$', '', key)
+        key = re.sub(r'^(large|medium|small|extra-large|xl|big)\s+', '', key)
+        key = re.sub(r'\s+', ' ', key).strip()
+        key = re.sub(r'ies$', 'y', key)
+        key = re.sub(r'([^s])s$', r'\1', key)
+        return key
+
+    def _rename_ing(text, new_name):
+        """Replace the name part of an ingredient string, keeping qty+unit."""
+        m = ING_RE.match(text.strip())
+        if m:
+            qty = m.group(1)
+            unit = (' ' + m.group(2).strip()) if m.group(2) else ''
+            return f"{qty}{unit} {new_name}"
+        return new_name
+
+    db = get_db()
+    rows = db.execute("SELECT id, ingredient_groups FROM recipes").fetchall()
+    updated = 0
+    for row in rows:
+        rid = row[0]
+        try:
+            igs = json.loads(row[1] or "[]")
+        except Exception:
+            continue
+        changed = False
+        for g in igs:
+            new_ings = []
+            for ing in g.get("ingredients", []):
+                if _name_key(ing) == old_key:
+                    new_ings.append(_rename_ing(ing, new_name))
+                    changed = True
+                else:
+                    new_ings.append(ing)
+            g["ingredients"] = new_ings
+        if changed:
+            flat = [i for g in igs for i in g.get("ingredients", [])]
+            db.execute(
+                "UPDATE recipes SET ingredient_groups=?, ingredients=? WHERE id=?",
+                (json.dumps(igs), json.dumps(flat), rid)
+            )
+            updated += 1
+    db.commit()
+    return jsonify({"ok": True, "updated_recipes": updated})
+
+
 @app.route("/shopping/ingredients", methods=["GET"])
 def list_shopping_ingredients():
     """Return all unique ingredient strings from all recipes in the active cookbook."""
@@ -1743,6 +1949,14 @@ def list_shopping_ingredients():
 
 # ── Backup ────────────────────────────────────────────────────────────────────
 
+def _backup_cookbook_name(fname):
+    """Extract original cookbook name from a backup filename.
+    Format: {cb_name}_{YYYY-MM-DD} or {cb_name}_{YYYY-MM-DD_HH-MM-SS}"""
+    stem = fname[:-len('.cookbook')] if fname.endswith('.cookbook') else fname
+    m = re.match(r'^(.+?)_(\d{4}-\d{2}-\d{2}(?:_\d{2}-\d{2}-\d{2})?)$', stem)
+    return m.group(1) if m else stem
+
+
 @app.route("/backup/list", methods=["GET"])
 def list_backups():
     backup_dir = os.path.join(DATA_DIR, "backups")
@@ -1751,34 +1965,52 @@ def list_backups():
     for fname in sorted(os.listdir(backup_dir), reverse=True):
         if fname.endswith(".cookbook"):
             path = os.path.join(backup_dir, fname)
+            cb_name = _backup_cookbook_name(fname)
             files.append({
                 "filename": fname,
                 "path": path,
                 "size": os.path.getsize(path),
                 "modified": os.path.getmtime(path),
+                "cookbook_name": cb_name,
             })
-    return jsonify(files[:30])  # Return last 30 backups
+    return jsonify(files[:60])  # Return last 60 (2 per cookbook × 30 days)
 
 
 @app.route("/backup/create", methods=["POST"])
 def create_backup():
+    """Create a timestamped backup of EVERY known cookbook."""
     import shutil, datetime
     backup_dir = os.path.join(DATA_DIR, "backups")
     os.makedirs(backup_dir, exist_ok=True)
     ts = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    cb_name = os.path.splitext(os.path.basename(active_db_path()))[0]
-    backup_name = f"{cb_name}_{ts}.cookbook"
-    backup_path = os.path.join(backup_dir, backup_name)
-    shutil.copy2(active_db_path(), backup_path)
-    # Clean up old backups - keep last 30
-    all_backups = sorted([
+    created = []
+    # Collect all known cookbook paths
+    all_books = get_cookbooks_list()
+    paths_to_backup = [b["path"] for b in all_books if os.path.exists(b["path"])]
+    if not paths_to_backup:
+        paths_to_backup = [active_db_path()]
+    for cb_path in paths_to_backup:
+        cb_name = os.path.splitext(os.path.basename(cb_path))[0]
+        backup_name = f"{cb_name}_{ts}.cookbook"
+        backup_path = os.path.join(backup_dir, backup_name)
+        shutil.copy2(cb_path, backup_path)
+        created.append({"filename": backup_name, "path": backup_path, "cookbook_name": cb_name})
+    # Clean up: keep last 30 per cookbook
+    all_files = sorted([
         os.path.join(backup_dir, f) for f in os.listdir(backup_dir)
         if f.endswith(".cookbook")
     ], key=os.path.getmtime)
-    for old in all_backups[:-30]:
-        try: os.remove(old)
-        except OSError: pass
-    return jsonify({"ok": True, "path": backup_path, "filename": backup_name})
+    # Group by cookbook name and prune each
+    from collections import defaultdict
+    by_cb: dict = defaultdict(list)
+    for fp in all_files:
+        by_cb[_backup_cookbook_name(os.path.basename(fp))].append(fp)
+    for cb_files in by_cb.values():
+        for old in sorted(cb_files, key=os.path.getmtime)[:-30]:
+            try: os.remove(old)
+            except OSError: pass
+    return jsonify({"ok": True, "created": created,
+                    "filename": created[0]["filename"] if created else ""})
 
 
 @app.route("/backup/restore", methods=["POST"])
@@ -1804,8 +2036,15 @@ def restore_backup():
         conn.close()
     except Exception:
         return jsonify({"error": "Invalid backup file"}), 400
-    shutil.copy2(backup_path, active_db_path())
-    return jsonify({"ok": True})
+    # Determine which cookbook this backup belongs to (by name in filename)
+    cb_name = _backup_cookbook_name(os.path.basename(backup_path))
+    target_path = os.path.join(COOKBOOKS_DIR, cb_name + ".cookbook")
+    # Fall back to active cookbook if no match found
+    if not os.path.exists(target_path):
+        target_path = active_db_path()
+    shutil.copy2(backup_path, target_path)
+    _invalidate_cookbooks_cache()
+    return jsonify({"ok": True, "restored_to": cb_name})
 
 
 # ── CSV helpers ────────────────────────────────────────────────────────────────
@@ -1993,6 +2232,7 @@ def parse_accuchef_csv(csv_path):
             servings_str  = row[3].strip()
             servings_unit = row[4].strip()
             time_str      = row[5].strip()
+            notes_raw     = row[6].strip() if len(row) > 6 else ""
             servings = f"{servings_str} {servings_unit}".strip() if servings_unit else servings_str
             instructions_raw = row[-1].strip()
             ingredient_cols  = row[7:-1]
@@ -2026,6 +2266,7 @@ def parse_accuchef_csv(csv_path):
                 "site_name":          "AccuChef Import",
                 "source_url":         None,
                 "category":           category,
+                "notes":              notes_raw or None,
             })
     return recipes
 
