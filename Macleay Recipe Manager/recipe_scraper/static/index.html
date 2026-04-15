@@ -2032,6 +2032,7 @@ function buildIngGroupsEditable(groups) {
            <span class="group-header-editable" draggable="true" data-gidx="${gIdx}"
              ondragstart="ingGroupDragStart(event)" ondragover="ingGroupDragOver(event)"
              ondrop="ingGroupDrop(event)" ondragleave="ingGroupDragLeave(event)"
+             ondragend="this.style.opacity=''"
              onclick="inlineEditIngGroupName(this,${gIdx})">${esc(g.purpose || "Untitled Section")}</span>
            <button class="del-section-btn" onclick="deleteIngredientGroup(${gIdx})" title="Delete section">✕ section</button>
          </div>` : "";
@@ -2060,6 +2061,7 @@ function buildStepGroupsEditable(groups) {
            <span class="group-header-editable" draggable="true" data-gidx="${gIdx}"
              ondragstart="stepGroupDragStart(event)" ondragover="stepGroupDragOver(event)"
              ondrop="stepGroupDrop(event)" ondragleave="stepGroupDragLeave(event)"
+             ondragend="this.style.opacity=''"
              onclick="inlineEditStepGroupName(this,${gIdx})">${esc(g.purpose || "Untitled Section")}</span>
            <button class="del-section-btn" onclick="deleteInstructionGroup(${gIdx})" title="Delete section">✕ section</button>
          </div>` : "";
@@ -2105,24 +2107,34 @@ function ingDrop(e) {
   e.preventDefault();
   const target = e.currentTarget;
   target.style.borderTop = '';
-  if (!_dragSrc || _dragSrc.type !== 'ing') return;
+  if (!_dragSrc) return;
   const toGIdx = +target.dataset.gidx;
   const toIIdx = +target.dataset.iidx;
-  if (_dragSrc.gIdx === toGIdx && _dragSrc.iIdx === toIIdx) return;
   const ig = selectedRecipe.ingredient_groups;
-  const fromArr = ig[_dragSrc.gIdx].ingredients;
-  const [moved] = fromArr.splice(_dragSrc.iIdx, 1);
-  ig[toGIdx].ingredients.splice(toIIdx, 0, moved);
+  if (_dragSrc.type === 'ing') {
+    if (_dragSrc.gIdx === toGIdx && _dragSrc.iIdx === toIIdx) { _dragSrc = null; return; }
+    const fromArr = ig[_dragSrc.gIdx].ingredients;
+    const [moved] = fromArr.splice(_dragSrc.iIdx, 1);
+    ig[toGIdx].ingredients.splice(toIIdx, 0, moved);
+  } else if (_dragSrc.type === 'ing-group') {
+    // Section dropped on an ingredient → move entire section to just before that ingredient's group
+    const fromGIdx = _dragSrc.gIdx;
+    if (fromGIdx === toGIdx) { _dragSrc = null; return; }
+    const [moved] = ig.splice(fromGIdx, 1);
+    ig.splice(fromGIdx < toGIdx ? toGIdx - 1 : toGIdx, 0, moved);
+  } else { _dragSrc = null; return; }
   _dragSrc = null;
-  document.getElementById("saved-detail-content").innerHTML = buildSavedHTML(selectedRecipe);
-  initScaler();
-  showToast("Ingredient moved!");
+  renderSavedDetail();
+  patchRecipe();
+  showToast("Moved!");
 }
 
 function ingGroupDragStart(e) {
   const el = e.currentTarget;
   _dragSrc = {type:'ing-group', gIdx: +el.dataset.gidx};
   e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', 'ing-group');
+  el.style.opacity = '0.4';
 }
 function ingGroupDragOver(e) {
   e.preventDefault();
@@ -2135,16 +2147,25 @@ function ingGroupDrop(e) {
   e.preventDefault();
   const targetGroup = e.currentTarget.closest('.ing-group');
   if (targetGroup) targetGroup.style.borderTop = '';
-  if (!_dragSrc || _dragSrc.type !== 'ing-group') return;
+  if (!_dragSrc) return;
   const toGIdx = +targetGroup?.dataset?.gidx;
-  if (isNaN(toGIdx) || _dragSrc.gIdx === toGIdx) return;
+  if (isNaN(toGIdx)) return;
   const ig = selectedRecipe.ingredient_groups;
-  const [moved] = ig.splice(_dragSrc.gIdx, 1);
-  ig.splice(toGIdx, 0, moved);
+  if (_dragSrc.type === 'ing-group') {
+    const fromGIdx = _dragSrc.gIdx;
+    if (fromGIdx === toGIdx) { _dragSrc = null; return; }
+    const [moved] = ig.splice(fromGIdx, 1);
+    ig.splice(fromGIdx < toGIdx ? toGIdx - 1 : toGIdx, 0, moved);
+  } else if (_dragSrc.type === 'ing') {
+    // Ingredient dropped on a section header → move to first position in that section
+    const fromArr = ig[_dragSrc.gIdx].ingredients;
+    const [moved] = fromArr.splice(_dragSrc.iIdx, 1);
+    ig[toGIdx].ingredients.unshift(moved);
+  } else { _dragSrc = null; return; }
   _dragSrc = null;
-  document.getElementById("saved-detail-content").innerHTML = buildSavedHTML(selectedRecipe);
-  initScaler();
-  showToast("Section moved!");
+  renderSavedDetail();
+  patchRecipe();
+  showToast("Moved!");
 }
 
 function stepDragStart(e) {
@@ -2168,24 +2189,34 @@ function stepDrop(e) {
   e.preventDefault();
   const target = e.currentTarget;
   target.style.borderTop = '';
-  if (!_dragSrc || _dragSrc.type !== 'step') return;
+  if (!_dragSrc) return;
   const toGIdx = +target.dataset.gidx;
   const toSIdx = +target.dataset.sidx;
-  if (_dragSrc.gIdx === toGIdx && _dragSrc.sIdx === toSIdx) return;
   const sg = selectedRecipe.instruction_groups;
-  const fromArr = sg[_dragSrc.gIdx].steps;
-  const [moved] = fromArr.splice(_dragSrc.sIdx, 1);
-  sg[toGIdx].steps.splice(toSIdx, 0, moved);
+  if (_dragSrc.type === 'step') {
+    if (_dragSrc.gIdx === toGIdx && _dragSrc.sIdx === toSIdx) { _dragSrc = null; return; }
+    const fromArr = sg[_dragSrc.gIdx].steps;
+    const [moved] = fromArr.splice(_dragSrc.sIdx, 1);
+    sg[toGIdx].steps.splice(toSIdx, 0, moved);
+  } else if (_dragSrc.type === 'step-group') {
+    // Section dropped on a step → move entire section to just before that step's group
+    const fromGIdx = _dragSrc.gIdx;
+    if (fromGIdx === toGIdx) { _dragSrc = null; return; }
+    const [moved] = sg.splice(fromGIdx, 1);
+    sg.splice(fromGIdx < toGIdx ? toGIdx - 1 : toGIdx, 0, moved);
+  } else { _dragSrc = null; return; }
   _dragSrc = null;
-  document.getElementById("saved-detail-content").innerHTML = buildSavedHTML(selectedRecipe);
-  initScaler();
-  showToast("Step moved!");
+  renderSavedDetail();
+  patchRecipe();
+  showToast("Moved!");
 }
 
 function stepGroupDragStart(e) {
   const el = e.currentTarget;
   _dragSrc = {type:'step-group', gIdx: +el.dataset.gidx};
   e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', 'step-group');
+  el.style.opacity = '0.4';
 }
 function stepGroupDragOver(e) {
   e.preventDefault();
@@ -2198,16 +2229,25 @@ function stepGroupDrop(e) {
   e.preventDefault();
   const targetGroup = e.currentTarget.closest('.step-group');
   if (targetGroup) targetGroup.style.borderTop = '';
-  if (!_dragSrc || _dragSrc.type !== 'step-group') return;
+  if (!_dragSrc) return;
   const toGIdx = +targetGroup?.dataset?.gidx;
-  if (isNaN(toGIdx) || _dragSrc.gIdx === toGIdx) return;
+  if (isNaN(toGIdx)) return;
   const sg = selectedRecipe.instruction_groups;
-  const [moved] = sg.splice(_dragSrc.gIdx, 1);
-  sg.splice(toGIdx, 0, moved);
+  if (_dragSrc.type === 'step-group') {
+    const fromGIdx = _dragSrc.gIdx;
+    if (fromGIdx === toGIdx) { _dragSrc = null; return; }
+    const [moved] = sg.splice(fromGIdx, 1);
+    sg.splice(fromGIdx < toGIdx ? toGIdx - 1 : toGIdx, 0, moved);
+  } else if (_dragSrc.type === 'step') {
+    // Step dropped on a section header → move to first position in that section
+    const fromArr = sg[_dragSrc.gIdx].steps;
+    const [moved] = fromArr.splice(_dragSrc.sIdx, 1);
+    sg[toGIdx].steps.unshift(moved);
+  } else { _dragSrc = null; return; }
   _dragSrc = null;
-  document.getElementById("saved-detail-content").innerHTML = buildSavedHTML(selectedRecipe);
-  initScaler();
-  showToast("Section moved!");
+  renderSavedDetail();
+  patchRecipe();
+  showToast("Moved!");
 }
 
 // ── Scrape card ───────────────────────────────────────────────

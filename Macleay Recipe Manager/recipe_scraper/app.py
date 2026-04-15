@@ -817,7 +817,7 @@ def list_recipes():
     rows = get_db().execute(
         "SELECT id,title,servings,servings_num,"
         "ingredient_groups,instruction_groups,total_time,site_name,source_url,"
-        "category,categories,notes,view_count,created_at,updated_at,base_recipe"
+        "category,categories,notes,view_count,created_at,updated_at,base_recipe,scale_by_batch"
         " FROM recipes ORDER BY created_at DESC"
     ).fetchall()
     return jsonify([row_to_dict(r) for r in rows])
