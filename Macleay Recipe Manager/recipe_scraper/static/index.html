@@ -2025,15 +2025,14 @@ function buildStepGroupsReadonly(groups) {
 
 // ── Editable ingredient groups (saved view) ───────────────────
 function buildIngGroupsEditable(groups) {
-  const multiGroup = groups.length > 1 || (groups[0] && groups[0].purpose);
   return groups.map((g, gIdx) => {
-    const headerHtml = multiGroup
+    const headerHtml = g.purpose
       ? `<div style="display:flex;align-items:center">
            <span class="group-header-editable" draggable="true" data-gidx="${gIdx}"
              ondragstart="ingGroupDragStart(event)" ondragover="ingGroupDragOver(event)"
              ondrop="ingGroupDrop(event)" ondragleave="ingGroupDragLeave(event)"
              ondragend="this.style.opacity=''"
-             onclick="inlineEditIngGroupName(this,${gIdx})">${esc(g.purpose || "Untitled Section")}</span>
+             onclick="inlineEditIngGroupName(this,${gIdx})">${esc(g.purpose)}</span>
            <button class="del-section-btn" onclick="deleteIngredientGroup(${gIdx})" title="Delete section">✕ section</button>
          </div>` : "";
     const items = g.ingredients.map((ing, iIdx) =>
@@ -2054,15 +2053,14 @@ function buildIngGroupsEditable(groups) {
 // ── Editable instruction groups (saved view) ──────────────────
 function buildStepGroupsEditable(groups) {
   let stepNum = 1;
-  const multiGroup = groups.length > 1 || (groups[0] && groups[0].purpose);
   return groups.map((g, gIdx) => {
-    const headerHtml = multiGroup
+    const headerHtml = g.purpose
       ? `<div style="display:flex;align-items:center">
            <span class="group-header-editable" draggable="true" data-gidx="${gIdx}"
              ondragstart="stepGroupDragStart(event)" ondragover="stepGroupDragOver(event)"
              ondrop="stepGroupDrop(event)" ondragleave="stepGroupDragLeave(event)"
              ondragend="this.style.opacity=''"
-             onclick="inlineEditStepGroupName(this,${gIdx})">${esc(g.purpose || "Untitled Section")}</span>
+             onclick="inlineEditStepGroupName(this,${gIdx})">${esc(g.purpose)}</span>
            <button class="del-section-btn" onclick="deleteInstructionGroup(${gIdx})" title="Delete section">✕ section</button>
          </div>` : "";
     const items = g.steps.map((s, sIdx) => {
@@ -2117,11 +2115,22 @@ function ingDrop(e) {
     const [moved] = fromArr.splice(_dragSrc.iIdx, 1);
     ig[toGIdx].ingredients.splice(toIIdx, 0, moved);
   } else if (_dragSrc.type === 'ing-group') {
-    // Section dropped on an ingredient → move entire section to just before that ingredient's group
+    // Section dropped on an ingredient → split the target group at that position.
+    // Ingredients from toIIdx onwards are absorbed into the moved section;
+    // ingredients before toIIdx stay in the original group (which may have no purpose).
     const fromGIdx = _dragSrc.gIdx;
     if (fromGIdx === toGIdx) { _dragSrc = null; return; }
-    const [moved] = ig.splice(fromGIdx, 1);
-    ig.splice(fromGIdx < toGIdx ? toGIdx - 1 : toGIdx, 0, moved);
+    const [movedSection] = ig.splice(fromGIdx, 1);
+    const adjToGIdx = fromGIdx < toGIdx ? toGIdx - 1 : toGIdx;
+    const targetGroup = ig[adjToGIdx];
+    const before = targetGroup.ingredients.slice(0, toIIdx);
+    const after  = targetGroup.ingredients.slice(toIIdx);
+    movedSection.ingredients = [...after, ...movedSection.ingredients];
+    if (before.length > 0) {
+      ig.splice(adjToGIdx, 1, {...targetGroup, ingredients: before}, movedSection);
+    } else {
+      ig.splice(adjToGIdx, 1, movedSection);
+    }
   } else { _dragSrc = null; return; }
   _dragSrc = null;
   renderSavedDetail();
@@ -2199,11 +2208,20 @@ function stepDrop(e) {
     const [moved] = fromArr.splice(_dragSrc.sIdx, 1);
     sg[toGIdx].steps.splice(toSIdx, 0, moved);
   } else if (_dragSrc.type === 'step-group') {
-    // Section dropped on a step → move entire section to just before that step's group
+    // Section dropped on a step → split the target group at that position.
     const fromGIdx = _dragSrc.gIdx;
     if (fromGIdx === toGIdx) { _dragSrc = null; return; }
-    const [moved] = sg.splice(fromGIdx, 1);
-    sg.splice(fromGIdx < toGIdx ? toGIdx - 1 : toGIdx, 0, moved);
+    const [movedSection] = sg.splice(fromGIdx, 1);
+    const adjToGIdx = fromGIdx < toGIdx ? toGIdx - 1 : toGIdx;
+    const targetGroup = sg[adjToGIdx];
+    const before = targetGroup.steps.slice(0, toSIdx);
+    const after  = targetGroup.steps.slice(toSIdx);
+    movedSection.steps = [...after, ...movedSection.steps];
+    if (before.length > 0) {
+      sg.splice(adjToGIdx, 1, {...targetGroup, steps: before}, movedSection);
+    } else {
+      sg.splice(adjToGIdx, 1, movedSection);
+    }
   } else { _dragSrc = null; return; }
   _dragSrc = null;
   renderSavedDetail();
