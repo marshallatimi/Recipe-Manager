@@ -4534,7 +4534,7 @@ function categorizeShopping(combined) {
   SHOP_CATEGORY_NAMES.forEach(cat => categorized[cat] = []);
   combined.forEach(ing => {
     const key = ingNameKey(parseIngForCombine(ing).name);
-    const savedCat = _shopSettings.ingredient_categories[key];
+    const savedCat = _shopSettings.ingredient_categories[key.toLowerCase()] || _shopSettings.ingredient_categories[key];
     let matched = savedCat && categorized[savedCat] !== undefined ? savedCat : null;
     if (!matched) {
       const lower = ing.toLowerCase();
@@ -4585,7 +4585,7 @@ function renderShopSettingsList() {
   // Precompute effective category once per ingredient (avoids calling _autoDetectCategory twice)
   let items = _shopSettingsIngredients.map(k => ({
     key: k,
-    cat: _shopSettings.ingredient_categories[k] || _autoDetectCategory(k)
+    cat: _shopSettings.ingredient_categories[k.toLowerCase()] || _shopSettings.ingredient_categories[k] || _autoDetectCategory(k)
   }));
   if (search) items = items.filter(({key}) => key.includes(search));
   if (catFilter) items = items.filter(({cat}) => cat === catFilter);
@@ -4600,7 +4600,7 @@ function renderShopSettingsList() {
     const safeKey = key.replace(/\\/g,"\\\\").replace(/'/g,"\\'");
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.38rem 0.7rem;border-bottom:1px solid var(--border);gap:0.4rem">
       <span style="font-size:0.85rem;flex:1;cursor:pointer;border-radius:4px;padding:0.1rem 0.25rem" title="Click to rename" onclick="renameShopIngredient('${safeKey}', this)">${esc(key)}</span>
-      <select onchange="_shopSettings.ingredient_categories['${safeKey}']=this.value"
+      <select onchange="setShopCategory('${safeKey}', this.value)"
         style="padding:0.2rem 0.3rem;border:1px solid var(--border);border-radius:4px;background:var(--card);color:var(--text);font-size:0.78rem">
         ${opts}
       </select>
@@ -4633,6 +4633,22 @@ async function saveShopSettings() {
   } catch { showAlert("Failed to save settings."); }
 }
 
+// Silent auto-save used when category dropdowns change — no toast, no close
+async function _autoSaveShopSettings() {
+  try {
+    await fetch("/shopping/settings", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(_shopSettings)
+    });
+  } catch {}
+}
+
+// Store category with a normalised lowercase key and auto-save
+function setShopCategory(key, val) {
+  _shopSettings.ingredient_categories[key.toLowerCase()] = val;
+  _autoSaveShopSettings();
+}
+
 function closeShopSettings(e) {
   if (!e || e.target === document.getElementById("shop-settings-backdrop"))
     document.getElementById("shop-settings-backdrop").hidden = true;
@@ -4661,11 +4677,14 @@ function renameShopIngredient(oldKey, spanEl) {
       // Update in-memory key
       const newKey = newName.toLowerCase().replace(/\s+/g,' ').trim()
         .replace(/ies$/, 'y').replace(/([^s])s$/, '$1');
-      const oldCat = _shopSettings.ingredient_categories[oldKey];
+      const oldCat = _shopSettings.ingredient_categories[oldKey.toLowerCase()] || _shopSettings.ingredient_categories[oldKey];
       if (oldCat) {
         _shopSettings.ingredient_categories[newKey] = oldCat;
+        delete _shopSettings.ingredient_categories[oldKey.toLowerCase()];
         delete _shopSettings.ingredient_categories[oldKey];
       }
+      // Save current categories before reloading so nothing is lost
+      await _autoSaveShopSettings();
       // Reload ingredient list and recipes
       savedRecipes = await (await fetch("/recipes")).json();
       await showShopSettings();
