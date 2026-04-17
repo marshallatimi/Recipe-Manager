@@ -4825,7 +4825,7 @@ function ingNameKey(name) {
     .toLowerCase()
     .replace(/^[-–—\s]+/, '')   // strip leading dashes/em-dashes
     .replace(/\(.*?\)/g, '')   // strip (notes)
-    .replace(/,.*$/, '')        // strip ", optional" etc
+    .replace(/,\s*(optional|to taste|if desired|as needed|or to taste|for serving|for garnish|freshly ground|ground)\s*$/i, '') // strip common annotations only
     .replace(/^(large|medium|small|extra.large|xl|big)\s+/i, '')
     .replace(/\s+/g, ' ')
     .trim()
