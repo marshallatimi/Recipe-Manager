@@ -4580,14 +4580,20 @@ async function showShopSettings() {
   await loadShopSettings();
   try {
     const rawIngs = await (await fetch("/shopping/ingredients")).json();
-    const keys = new Set();
-    const result = [];
+    const keyMap = new Map(); // key → best display name
     rawIngs.forEach(raw => {
-      const key = ingNameKey(parseIngForCombine(raw).name);
-      if (key && !keys.has(key)) { keys.add(key); result.push(key); }
+      const name = parseIngForCombine(raw).name;
+      const key = ingNameKey(name);
+      if (key) {
+        // Prefer the longest (most descriptive) raw name as display label
+        if (!keyMap.has(key) || name.length > keyMap.get(key).length) {
+          keyMap.set(key, name);
+        }
+      }
     });
-    result.sort((a, b) => a.localeCompare(b));
-    _shopSettingsIngredients = result;
+    _shopSettingsIngredients = [...keyMap.entries()]
+      .map(([key, display]) => ({ key, display }))
+      .sort((a, b) => a.display.localeCompare(b.display));
   } catch {
     _shopSettingsIngredients = [];
   }
@@ -4608,11 +4614,12 @@ function renderShopSettingsList() {
     });
   }
   // Precompute effective category once per ingredient (avoids calling _autoDetectCategory twice)
-  let items = _shopSettingsIngredients.map(k => ({
-    key: k,
-    cat: _shopSettings.ingredient_categories[k.toLowerCase()] || _shopSettings.ingredient_categories[k] || _autoDetectCategory(k)
+  let items = _shopSettingsIngredients.map(({key, display}) => ({
+    key,
+    display,
+    cat: _shopSettings.ingredient_categories[key.toLowerCase()] || _shopSettings.ingredient_categories[key] || _autoDetectCategory(key)
   }));
-  if (search) items = items.filter(({key}) => key.includes(search));
+  if (search) items = items.filter(({key, display}) => display.toLowerCase().includes(search) || key.includes(search));
   if (catFilter) items = items.filter(({cat}) => cat === catFilter);
   const el = document.getElementById("shop-settings-list");
   if (!el) return;
@@ -4620,11 +4627,12 @@ function renderShopSettingsList() {
     el.innerHTML = `<div style="padding:1rem;text-align:center;color:var(--muted);font-size:0.85rem">${_shopSettingsIngredients.length ? "No matches." : "No ingredients found in your cookbook."}</div>`;
     return;
   }
-  el.innerHTML = items.map(({key, cat: current}) => {
+  el.innerHTML = items.map(({key, display, cat: current}) => {
     const opts = SHOP_CATEGORY_NAMES.map(c => `<option value="${esc(c)}"${current===c?" selected":""}>${esc(c)}</option>`).join("");
     const safeKey = key.replace(/\\/g,"\\\\").replace(/'/g,"\\'");
+    const safeDisplay = display.replace(/\\/g,"\\\\").replace(/'/g,"\\'");
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.38rem 0.7rem;border-bottom:1px solid var(--border);gap:0.4rem">
-      <span style="font-size:0.85rem;flex:1;cursor:pointer;border-radius:4px;padding:0.1rem 0.25rem" title="Click to rename" onclick="renameShopIngredient('${safeKey}', this)">${esc(key)}</span>
+      <span style="font-size:0.85rem;flex:1;cursor:pointer;border-radius:4px;padding:0.1rem 0.25rem" title="Click to rename" onclick="renameShopIngredient('${safeKey}', this, '${safeDisplay}')">${esc(display)}</span>
       <select onchange="setShopCategory('${safeKey}', this.value)"
         style="padding:0.2rem 0.3rem;border:1px solid var(--border);border-radius:4px;background:var(--card);color:var(--text);font-size:0.78rem">
         ${opts}
@@ -4634,7 +4642,7 @@ function renderShopSettingsList() {
 }
 
 function autoAssignShopSettings() {
-  _shopSettingsIngredients.forEach(key => {
+  _shopSettingsIngredients.forEach(({key}) => {
     _shopSettings.ingredient_categories[key] = _autoDetectCategory(key);
   });
   renderShopSettingsList();
@@ -4679,10 +4687,10 @@ function closeShopSettings(e) {
     document.getElementById("shop-settings-backdrop").hidden = true;
 }
 
-function renameShopIngredient(oldKey, spanEl) {
+function renameShopIngredient(oldKey, spanEl, displayName) {
   const inp = document.createElement("input");
   inp.className = "inline-input";
-  inp.value = oldKey;
+  inp.value = displayName || oldKey;
   inp.style.flex = "1";
   inp.style.fontSize = "0.85rem";
   inp.style.minWidth = "0";
