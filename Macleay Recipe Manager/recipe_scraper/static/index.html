@@ -4633,8 +4633,11 @@ function renderShopSettingsList() {
     const opts = SHOP_CATEGORY_NAMES.map(c => `<option value="${esc(c)}"${current===c?" selected":""}>${esc(c)}</option>`).join("");
     const safeKey = key.replace(/\\/g,"\\\\").replace(/'/g,"\\'");
     const safeDisplay = display.replace(/\\/g,"\\\\").replace(/'/g,"\\'");
+    // namePart = just the ingredient name without qty/unit (what the user edits when renaming)
+    const namePart = parseIngForCombine(display).name || key;
+    const safeNamePart = namePart.replace(/\\/g,"\\\\").replace(/'/g,"\\'");
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.38rem 0.7rem;border-bottom:1px solid var(--border);gap:0.4rem">
-      <span style="font-size:0.85rem;flex:1;cursor:pointer;border-radius:4px;padding:0.1rem 0.25rem" title="Click to rename" onclick="renameShopIngredient('${safeKey}', this, '${safeDisplay}')">${esc(display)}</span>
+      <span style="font-size:0.85rem;flex:1;cursor:pointer;border-radius:4px;padding:0.1rem 0.25rem" title="Click to rename" onclick="renameShopIngredient('${safeKey}', this, '${safeDisplay}', '${safeNamePart}')">${esc(display)}</span>
       <select onchange="setShopCategory('${safeKey}', this.value)"
         style="padding:0.2rem 0.3rem;border:1px solid var(--border);border-radius:4px;background:var(--card);color:var(--text);font-size:0.78rem">
         ${opts}
@@ -4692,10 +4695,11 @@ function closeShopSettings(e) {
     document.getElementById("shop-settings-backdrop").hidden = true;
 }
 
-function renameShopIngredient(oldKey, spanEl, displayName) {
+function renameShopIngredient(oldKey, spanEl, displayName, namePart) {
   const inp = document.createElement("input");
   inp.className = "inline-input";
-  inp.value = displayName || oldKey;
+  // Show the name-only portion (no qty/unit) so edits replace just the name in all recipes
+  inp.value = namePart || displayName || oldKey;
   inp.style.flex = "1";
   inp.style.fontSize = "0.85rem";
   inp.style.minWidth = "0";
@@ -4703,7 +4707,8 @@ function renameShopIngredient(oldKey, spanEl, displayName) {
   inp.focus(); inp.select();
   const finish = async () => {
     const newName = inp.value.trim();
-    if (!newName || newName.toLowerCase() === oldKey.toLowerCase()) {
+    // Skip only if text is completely unchanged (allows capitalization changes)
+    if (!newName || newName === (namePart || displayName || oldKey)) {
       renderShopSettingsList(); return;
     }
     const res = await fetch("/shopping/rename-ingredient", {
@@ -4850,8 +4855,11 @@ function mergeIngItems(items) {
   const nu = u => u ? u.toLowerCase().replace(/\s+/g,'') : null;
   if (!items.every(i => i.qty !== null && !isNaN(i.qty))) return items[0].original;
   const units = items.map(i => nu(i.unit));
-  // Use longest (most descriptive) name
-  const bestName = items.map(i => i.name).sort((a,b) => b.length - a.length)[0];
+  // Use longest (most descriptive) name; prefer Title Case when lengths are equal
+  const bestName = items.map(i => i.name).sort((a,b) => {
+    if (b.length !== a.length) return b.length - a.length;
+    return (b.match(/[A-Z]/g)||[]).length - (a.match(/[A-Z]/g)||[]).length;
+  })[0];
   // All volume?
   if (units.every(u => u && VOL_TSP[u] !== undefined)) {
     const tot = items.reduce((s,i) => s + i.qty * VOL_TSP[nu(i.unit)], 0);

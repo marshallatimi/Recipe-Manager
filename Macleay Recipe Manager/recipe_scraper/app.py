@@ -2049,8 +2049,10 @@ def rename_shopping_ingredient():
         m = ING_RE.match(text.strip())
         name = m.group(3).strip() if m else text.strip()
         key = name.lower()
-        key = re.sub(r'\(.*?\)', '', key)
-        key = re.sub(r',.*$', '', key)
+        key = re.sub(r'^[-–—\s]+', '', key)          # strip leading dashes
+        key = re.sub(r'\(.*?\)', '', key)             # strip (notes)
+        # Annotation-only comma strip — mirrors JS ingNameKey
+        key = re.sub(r',\s*(optional|to taste|if desired|as needed|or to taste|for serving|for garnish|freshly ground|ground)\s*$', '', key, flags=re.IGNORECASE)
         key = re.sub(r'^(large|medium|small|extra-large|xl|big)\s+', '', key)
         key = re.sub(r'\s+', ' ', key).strip()
         key = re.sub(r'ies$', 'y', key)
