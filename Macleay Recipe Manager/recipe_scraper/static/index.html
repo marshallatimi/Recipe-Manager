@@ -1032,7 +1032,7 @@ let selectedRecipe = null;
 let _recipeHistory = [];     // undo stack — deep-cloned recipe states
 let _prevRecipeState = null; // state as of last save, pushed to history on next edit
 let _recipeUndoing = false;  // guard: don't push to history during an undo restore
-let currentSort = localStorage.getItem("recipeSort") || "newest";
+let currentSort = localStorage.getItem("recipeSort") || "az";
 let currentCatFilter = localStorage.getItem("recipeCatFilter") || "";
 let shoppingList = JSON.parse(localStorage.getItem("shoppingList") || "[]");
 let savedMeals = [];
@@ -2067,8 +2067,15 @@ function buildIngGroupsEditable(groups) {
          <button class="del-btn" onclick="deleteIngredient(${gIdx},${iIdx})" title="Remove">✕</button>
        </div>`
     ).join("");
+    const emptyZone = g.ingredients.length === 0
+      ? `<div class="ing-row ing-empty-drop" data-gidx="${gIdx}" data-iidx="0"
+           ondragover="ingDragOver(event)" ondrop="ingDrop(event)" ondragleave="ingDragLeave(event)"
+           style="min-height:2rem;border:1px dashed #aaa;border-radius:4px;margin:0.2rem 0;
+                  opacity:0.6;display:flex;align-items:center;justify-content:center;
+                  font-size:0.8rem;color:#999;pointer-events:auto">Drop here</div>`
+      : "";
     return `<div class="ing-group" data-gidx="${gIdx}">
-      ${headerHtml}${items}
+      ${headerHtml}${items}${emptyZone}
       <button class="add-item-btn" onclick="addIngredientToGroup(${gIdx})">+ Add ingredient</button>
     </div>`;
   }).join("");
@@ -2097,8 +2104,15 @@ function buildStepGroupsEditable(groups) {
          <button class="del-btn" onclick="deleteStep(${gIdx},${sIdx})" title="Remove">✕</button>
        </div>`;
     }).join("");
+    const emptyZone = g.steps.length === 0
+      ? `<div class="step-row step-empty-drop" data-gidx="${gIdx}" data-sidx="0"
+           ondragover="stepDragOver(event)" ondrop="stepDrop(event)" ondragleave="stepDragLeave(event)"
+           style="min-height:2rem;border:1px dashed #aaa;border-radius:4px;margin:0.2rem 0;
+                  opacity:0.6;display:flex;align-items:center;justify-content:center;
+                  font-size:0.8rem;color:#999;pointer-events:auto">Drop here</div>`
+      : "";
     return `<div class="step-group" data-gidx="${gIdx}">
-      ${headerHtml}${items}
+      ${headerHtml}${items}${emptyZone}
       <button class="add-item-btn" onclick="addStepToGroup(${gIdx})">+ Add step</button>
     </div>`;
   }).join("");
@@ -2152,13 +2166,12 @@ function ingDrop(e) {
     const tg   = ig[adjG];
     const before = tg.ingredients.slice(0, toIIdx);
     const after  = tg.ingredients.slice(toIIdx);
-    const newSec = {purpose, ingredients: []};
-    if (before.length && after.length) {
-      ig.splice(adjG, 1, {...tg, ingredients: before}, newSec, {purpose: null, ingredients: after});
-    } else if (before.length) {
+    // New section absorbs items from the drop point onward; before-items stay in target group.
+    const newSec = {purpose, ingredients: after};
+    if (before.length) {
       ig.splice(adjG, 1, {...tg, ingredients: before}, newSec);
     } else {
-      ig.splice(adjG, 1, newSec, {...tg, ingredients: after});
+      ig.splice(adjG, 1, newSec);
     }
   } else { _dragSrc = null; return; }
   _dragSrc = null;
@@ -2253,13 +2266,12 @@ function stepDrop(e) {
     const tg   = sg[adjG];
     const before = tg.steps.slice(0, toSIdx);
     const after  = tg.steps.slice(toSIdx);
-    const newSec = {purpose, steps: []};
-    if (before.length && after.length) {
-      sg.splice(adjG, 1, {...tg, steps: before}, newSec, {purpose: null, steps: after});
-    } else if (before.length) {
+    // New section absorbs steps from the drop point onward; before-steps stay in target group.
+    const newSec = {purpose, steps: after};
+    if (before.length) {
       sg.splice(adjG, 1, {...tg, steps: before}, newSec);
     } else {
-      sg.splice(adjG, 1, newSec, {...tg, steps: after});
+      sg.splice(adjG, 1, newSec);
     }
   } else { _dragSrc = null; return; }
   _dragSrc = null;
@@ -5801,6 +5813,14 @@ function doPrint(fullHtml) {
 }
 
 const CHANGELOG = [
+  {
+    version: "v1.3.16",
+    notes: [
+      "Recipe grid now sorts A-Z by default for new users (existing sort preference preserved)",
+      "Empty ingredient/step sections now show a 'Drop here' zone so you can drag items into them",
+      "Fixed section-header drag: dragging a section header between two items now moves the header there and absorbs the items below the drop point into that section",
+    ]
+  },
   {
     version: "v1.3.0",
     notes: [
