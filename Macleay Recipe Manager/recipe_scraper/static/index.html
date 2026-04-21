@@ -2083,7 +2083,7 @@ function buildIngGroupsEditable(groups) {
          <button class="del-btn" onclick="deleteIngredient(${gIdx},${iIdx})" title="Remove">✕</button>
        </div>`
     ).join("");
-    // Empty group: show a visible drop target. Non-empty: invisible trailing strip for end-of-group drops.
+    // Empty group: visible "Drop here" target. Non-empty: trailing drop strip for end-of-group drops.
     const dropZone = g.ingredients.length === 0
       ? `<div class="ing-row ing-empty-drop" data-gidx="${gIdx}" data-iidx="0"
            ondragover="ingDragOver(event)" ondrop="ingDrop(event)" ondragleave="ingDragLeave(event)"
@@ -2092,14 +2092,8 @@ function buildIngGroupsEditable(groups) {
                   font-size:0.8rem;color:#999;pointer-events:auto">Drop here</div>`
       : `<div class="ing-trail-drop" data-gidx="${gIdx}" data-iidx="${g.ingredients.length}"
            ondragover="ingDragOver(event)" ondrop="ingDrop(event)" ondragleave="ingDragLeave(event)"
-           style="height:1.4rem;border-radius:4px;display:flex;align-items:center;padding-left:0.5rem;
-                  font-size:0.72rem;color:#666;cursor:default;"></div>`;
-    // Show "+ Add ingredient" on named sections and always on the last group (so there's always one).
-    const showAddBtn = g.purpose !== null || gIdx === groups.length - 1;
-    return `<div class="ing-group" data-gidx="${gIdx}">
-      ${headerHtml}${items}${dropZone}
-      ${showAddBtn ? `<button class="add-item-btn" onclick="addIngredientToGroup(${gIdx})">+ Add ingredient</button>` : ""}
-    </div>`;
+           style="height:1.4rem;border-radius:4px;"></div>`;
+    return `<div class="ing-group" data-gidx="${gIdx}">${headerHtml}${items}${dropZone}</div>`;
   }).join("");
 }
 
@@ -2134,13 +2128,8 @@ function buildStepGroupsEditable(groups) {
                   font-size:0.8rem;color:#999;pointer-events:auto">Drop here</div>`
       : `<div class="step-trail-drop" data-gidx="${gIdx}" data-sidx="${g.steps.length}"
            ondragover="stepDragOver(event)" ondrop="stepDrop(event)" ondragleave="stepDragLeave(event)"
-           style="height:1.4rem;border-radius:4px;display:flex;align-items:center;padding-left:0.5rem;
-                  font-size:0.72rem;color:#666;cursor:default;"></div>`;
-    const showAddBtn = g.purpose !== null || gIdx === groups.length - 1;
-    return `<div class="step-group" data-gidx="${gIdx}">
-      ${headerHtml}${items}${dropZone}
-      ${showAddBtn ? `<button class="add-item-btn" onclick="addStepToGroup(${gIdx})">+ Add step</button>` : ""}
-    </div>`;
+           style="height:1.4rem;border-radius:4px;"></div>`;
+    return `<div class="step-group" data-gidx="${gIdx}">${headerHtml}${items}${dropZone}</div>`;
   }).join("");
 }
 
@@ -2470,15 +2459,13 @@ function buildSavedHTML(r) {
 
     <div class="section-title">Ingredients</div>
     ${buildIngGroupsEditable(ig)}
-    ${multiIngGroup
-      ? `<button class="add-section-btn" onclick="addIngredientGroup()">+ Add ingredient section</button>`
-      : `<button class="add-section-btn" onclick="addIngredientGroup()">+ Add section</button>`}
+    <button class="add-item-btn" onclick="addIngredientToGroup(${ig.length - 1})">+ Add ingredient</button>
+    <button class="add-section-btn" onclick="addIngredientGroup()">+ Add section</button>
 
     <div class="section-title">Directions</div>
     ${buildStepGroupsEditable(sg)}
-    ${multiStepGroup
-      ? `<button class="add-section-btn" onclick="addInstructionGroup()">+ Add direction section</button>`
-      : `<button class="add-section-btn" onclick="addInstructionGroup()">+ Add section</button>`}
+    <button class="add-item-btn" onclick="addStepToGroup(${sg.length - 1})">+ Add step</button>
+    <button class="add-section-btn" onclick="addInstructionGroup()">+ Add section</button>
 
     <p style="font-size:0.78rem;color:var(--muted);margin-top:0.6rem">Click any field to edit it</p>
   </div></div>`;
@@ -5880,6 +5867,13 @@ function doPrint(fullHtml) {
 }
 
 const CHANGELOG = [
+  {
+    version: "v1.3.20",
+    notes: [
+      "Single '+ Add ingredient' and '+ Add step' at the very bottom of each list — no more one per section",
+      "Section headers are pure splitters: drag anywhere in the list (including within their own section to split it), and no orphan unnamed groups are ever left behind",
+    ]
+  },
   {
     version: "v1.3.19",
     notes: [
