@@ -240,8 +240,8 @@
     .add-section-btn { background:none; border:2px dashed var(--border); border-radius:6px; color:var(--muted); padding:0.3rem 0.8rem; cursor:pointer; font-size:0.82rem; width:100%; text-align:left; transition:border-color 0.2s,color 0.2s; margin-top:0.6rem; }
     .add-section-btn:hover { border-color:var(--red); color:var(--red); }
 
-    .ing-group { margin-bottom:0.5rem; }
-    .step-group { margin-bottom:1rem; }
+    .ing-group { margin-bottom:0; }
+    .step-group { margin-bottom:0; }
 
     .saved-toast { position:fixed; bottom:1.5rem; right:1.5rem; background:#155724; color:#fff; padding:0.6rem 1.2rem; border-radius:8px; font-size:0.9rem; font-weight:600; opacity:0; transition:opacity 0.3s; pointer-events:none; z-index:999; }
     .saved-toast.show { opacity:1; }
@@ -5867,6 +5867,12 @@ function doPrint(fullHtml) {
 }
 
 const CHANGELOG = [
+  {
+    version: "v1.3.21",
+    notes: [
+      "Removed gaps between ingredient and direction sections",
+    ]
+  },
   {
     version: "v1.3.20",
     notes: [
