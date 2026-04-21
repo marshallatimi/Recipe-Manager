@@ -2092,7 +2092,8 @@ function buildIngGroupsEditable(groups) {
                   font-size:0.8rem;color:#999;pointer-events:auto">Drop here</div>`
       : `<div class="ing-trail-drop" data-gidx="${gIdx}" data-iidx="${g.ingredients.length}"
            ondragover="ingDragOver(event)" ondrop="ingDrop(event)" ondragleave="ingDragLeave(event)"
-           style="height:0.6rem;border-radius:4px;"></div>`;
+           style="height:1.4rem;border-radius:4px;display:flex;align-items:center;padding-left:0.5rem;
+                  font-size:0.72rem;color:#666;cursor:default;"></div>`;
     // Show "+ Add ingredient" on named sections and always on the last group (so there's always one).
     const showAddBtn = g.purpose !== null || gIdx === groups.length - 1;
     return `<div class="ing-group" data-gidx="${gIdx}">
@@ -2133,7 +2134,8 @@ function buildStepGroupsEditable(groups) {
                   font-size:0.8rem;color:#999;pointer-events:auto">Drop here</div>`
       : `<div class="step-trail-drop" data-gidx="${gIdx}" data-sidx="${g.steps.length}"
            ondragover="stepDragOver(event)" ondrop="stepDrop(event)" ondragleave="stepDragLeave(event)"
-           style="height:0.6rem;border-radius:4px;"></div>`;
+           style="height:1.4rem;border-radius:4px;display:flex;align-items:center;padding-left:0.5rem;
+                  font-size:0.72rem;color:#666;cursor:default;"></div>`;
     const showAddBtn = g.purpose !== null || gIdx === groups.length - 1;
     return `<div class="step-group" data-gidx="${gIdx}">
       ${headerHtml}${items}${dropZone}
@@ -2144,6 +2146,18 @@ function buildStepGroupsEditable(groups) {
 
 // ── Drag-and-drop for ingredients and steps ───────────────────
 let _dragSrc = null; // {type: 'ing'|'step'|'ing-group'|'step-group', gIdx, iIdx/sIdx}
+
+// After a section-header drag the source group may become nameless. If two nameless
+// groups end up adjacent, merge them into one so the list stays clean.
+function mergeAdjacentNamelessGroups(groups, key) {
+  let i = 0;
+  while (i < groups.length - 1) {
+    if (groups[i].purpose == null && groups[i + 1].purpose == null) {
+      groups[i][key] = groups[i][key].concat(groups[i + 1][key]);
+      groups.splice(i + 1, 1);
+    } else { i++; }
+  }
+}
 
 function ingDragStart(e) {
   // Prevent drag when clicking directly on the text (user may be trying to edit)
@@ -2198,9 +2212,10 @@ function ingDrop(e) {
       ig.splice(adjG, 1, newSec);
     }
   } else { _dragSrc = null; return; }
+  mergeAdjacentNamelessGroups(ig, 'ingredients');
   _dragSrc = null;
+  patchRecipe();        // push history BEFORE render so undo button is correct
   renderSavedDetail();
-  patchRecipe();
   showToast("Moved!");
 }
 
@@ -2242,9 +2257,10 @@ function ingGroupDrop(e) {
     const [moved] = fromArr.splice(_dragSrc.iIdx, 1);
     ig[toGIdx].ingredients.unshift(moved);
   } else { _dragSrc = null; return; }
+  mergeAdjacentNamelessGroups(ig, 'ingredients');
   _dragSrc = null;
-  renderSavedDetail();
   patchRecipe();
+  renderSavedDetail();
   showToast("Moved!");
 }
 
@@ -2298,9 +2314,10 @@ function stepDrop(e) {
       sg.splice(adjG, 1, newSec);
     }
   } else { _dragSrc = null; return; }
+  mergeAdjacentNamelessGroups(sg, 'steps');
   _dragSrc = null;
-  renderSavedDetail();
   patchRecipe();
+  renderSavedDetail();
   showToast("Moved!");
 }
 
@@ -2342,9 +2359,10 @@ function stepGroupDrop(e) {
     const [moved] = fromArr.splice(_dragSrc.sIdx, 1);
     sg[toGIdx].steps.unshift(moved);
   } else { _dragSrc = null; return; }
+  mergeAdjacentNamelessGroups(sg, 'steps');
   _dragSrc = null;
-  renderSavedDetail();
   patchRecipe();
+  renderSavedDetail();
   showToast("Moved!");
 }
 
@@ -5837,6 +5855,14 @@ function doPrint(fullHtml) {
 }
 
 const CHANGELOG = [
+  {
+    version: "v1.3.18",
+    notes: [
+      "Fixed undo button showing disabled after a drag — history was being pushed after the button rendered, so the first drag appeared non-undoable",
+      "Dragging a section header away now auto-merges its leftover nameless ingredients into the adjacent group, so no orphan unlabelled chunks remain",
+      "Trailing drop zone (after the last ingredient/step) is now tall enough to actually hit when dragging",
+    ]
+  },
   {
     version: "v1.3.17",
     notes: [
