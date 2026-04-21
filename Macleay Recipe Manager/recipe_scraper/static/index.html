@@ -2147,16 +2147,90 @@ function buildStepGroupsEditable(groups) {
 // ── Drag-and-drop for ingredients and steps ───────────────────
 let _dragSrc = null; // {type: 'ing'|'step'|'ing-group'|'step-group', gIdx, iIdx/sIdx}
 
-// After a section-header drag the source group may become nameless. If two nameless
-// groups end up adjacent, merge them into one so the list stays clean.
-function mergeAdjacentNamelessGroups(groups, key) {
-  let i = 0;
-  while (i < groups.length - 1) {
-    if (groups[i].purpose == null && groups[i + 1].purpose == null) {
-      groups[i][key] = groups[i][key].concat(groups[i + 1][key]);
-      groups.splice(i + 1, 1);
-    } else { i++; }
+// ── Flat-list helpers for section-header dragging ─────────────
+// Represent groups as a flat array so headers can move anywhere freely.
+function igToFlat(groups) {
+  const f = [];
+  groups.forEach(g => {
+    if (g.purpose != null) f.push({type:'header', val:g.purpose});
+    g.ingredients.forEach(v => f.push({type:'ing', val:v}));
+  });
+  return f;
+}
+function igFlatToGroups(flat) {
+  const gs = []; let cur = null;
+  for (const item of flat) {
+    if (item.type === 'header') { if (cur) gs.push(cur); cur = {purpose:item.val, ingredients:[]}; }
+    else { if (!cur) cur = {purpose:null, ingredients:[]}; cur.ingredients.push(item.val); }
   }
+  if (cur) gs.push(cur);
+  return gs.length ? gs : [{purpose:null, ingredients:[]}];
+}
+// Flat index of the header for groups[gIdx]; -1 if nameless.
+function igHeaderIdx(groups, gIdx) {
+  if (groups[gIdx].purpose == null) return -1;
+  let fi = 0;
+  for (let g = 0; g < gIdx; g++) { if (groups[g].purpose != null) fi++; fi += groups[g].ingredients.length; }
+  return fi;
+}
+// Flat index for "before ingredient iIdx in group gIdx" (iIdx===length → after last item).
+function igDropPos(groups, toGIdx, toIIdx) {
+  let fi = 0;
+  for (let g = 0; g < toGIdx; g++) { if (groups[g].purpose != null) fi++; fi += groups[g].ingredients.length; }
+  if (groups[toGIdx].purpose != null) fi++;
+  return fi + toIIdx;
+}
+// Move a section header in the flat list and rebuild groups.
+function igMoveHeader(ig, fromGIdx, dropFlatPos) {
+  const hIdx = igHeaderIdx(ig, fromGIdx);
+  if (hIdx === -1) return;
+  const purpose = ig[fromGIdx].purpose;
+  const flat = igToFlat(ig);
+  flat.splice(hIdx, 1);
+  const adj = hIdx < dropFlatPos ? dropFlatPos - 1 : dropFlatPos;
+  flat.splice(adj, 0, {type:'header', val:purpose});
+  return igFlatToGroups(flat);
+}
+
+// Step equivalents
+function sgToFlat(groups) {
+  const f = [];
+  groups.forEach(g => {
+    if (g.purpose != null) f.push({type:'header', val:g.purpose});
+    g.steps.forEach(v => f.push({type:'step', val:v}));
+  });
+  return f;
+}
+function sgFlatToGroups(flat) {
+  const gs = []; let cur = null;
+  for (const item of flat) {
+    if (item.type === 'header') { if (cur) gs.push(cur); cur = {purpose:item.val, steps:[]}; }
+    else { if (!cur) cur = {purpose:null, steps:[]}; cur.steps.push(item.val); }
+  }
+  if (cur) gs.push(cur);
+  return gs.length ? gs : [{purpose:null, steps:[]}];
+}
+function sgHeaderIdx(groups, gIdx) {
+  if (groups[gIdx].purpose == null) return -1;
+  let fi = 0;
+  for (let g = 0; g < gIdx; g++) { if (groups[g].purpose != null) fi++; fi += groups[g].steps.length; }
+  return fi;
+}
+function sgDropPos(groups, toGIdx, toSIdx) {
+  let fi = 0;
+  for (let g = 0; g < toGIdx; g++) { if (groups[g].purpose != null) fi++; fi += groups[g].steps.length; }
+  if (groups[toGIdx].purpose != null) fi++;
+  return fi + toSIdx;
+}
+function sgMoveHeader(sg, fromGIdx, dropFlatPos) {
+  const hIdx = sgHeaderIdx(sg, fromGIdx);
+  if (hIdx === -1) return;
+  const purpose = sg[fromGIdx].purpose;
+  const flat = sgToFlat(sg);
+  flat.splice(hIdx, 1);
+  const adj = hIdx < dropFlatPos ? dropFlatPos - 1 : dropFlatPos;
+  flat.splice(adj, 0, {type:'header', val:purpose});
+  return sgFlatToGroups(flat);
 }
 
 function ingDragStart(e) {
@@ -2191,30 +2265,11 @@ function ingDrop(e) {
     const [moved] = fromArr.splice(_dragSrc.iIdx, 1);
     ig[toGIdx].ingredients.splice(toIIdx, 0, moved);
   } else if (_dragSrc.type === 'ing-group') {
-    // Header dropped on an ingredient → moves ONLY the label, all ingredients stay.
-    // Splits the target group at that ingredient; header becomes an empty section there.
-    const fromGIdx = _dragSrc.gIdx;
-    if (fromGIdx === toGIdx) { _dragSrc = null; return; }
-    const purpose = ig[fromGIdx].purpose;
-    ig[fromGIdx].purpose = null;
-    // Remove source group if now empty+nameless, then adjust target index
-    const srcWasRemoved = ig[fromGIdx].ingredients.length === 0;
-    if (srcWasRemoved) ig.splice(fromGIdx, 1);
-    const adjG = srcWasRemoved && fromGIdx < toGIdx ? toGIdx - 1 : toGIdx;
-    const tg   = ig[adjG];
-    const before = tg.ingredients.slice(0, toIIdx);
-    const after  = tg.ingredients.slice(toIIdx);
-    // New section absorbs items from the drop point onward; before-items stay in target group.
-    const newSec = {purpose, ingredients: after};
-    if (before.length) {
-      ig.splice(adjG, 1, {...tg, ingredients: before}, newSec);
-    } else {
-      ig.splice(adjG, 1, newSec);
-    }
+    const result = igMoveHeader(ig, _dragSrc.gIdx, igDropPos(ig, toGIdx, toIIdx));
+    if (result) selectedRecipe.ingredient_groups = result;
   } else { _dragSrc = null; return; }
-  mergeAdjacentNamelessGroups(ig, 'ingredients');
   _dragSrc = null;
-  patchRecipe();        // push history BEFORE render so undo button is correct
+  patchRecipe();
   renderSavedDetail();
   showToast("Moved!");
 }
@@ -2242,22 +2297,16 @@ function ingGroupDrop(e) {
   if (isNaN(toGIdx)) return;
   const ig = selectedRecipe.ingredient_groups;
   if (_dragSrc.type === 'ing-group') {
-    // Header dropped on another header → moves ONLY the label, all ingredients stay.
-    const fromGIdx = _dragSrc.gIdx;
-    if (fromGIdx === toGIdx) { _dragSrc = null; return; }
-    const purpose = ig[fromGIdx].purpose;
-    ig[fromGIdx].purpose = null;
-    const srcWasRemoved = ig[fromGIdx].ingredients.length === 0;
-    if (srcWasRemoved) ig.splice(fromGIdx, 1);
-    const adjTo = srcWasRemoved && fromGIdx < toGIdx ? toGIdx - 1 : toGIdx;
-    ig.splice(adjTo, 0, {purpose, ingredients: []});
+    // Dropped on a section header: place the dragged header just before the target header
+    const dropPos = igHeaderIdx(ig, toGIdx) !== -1 ? igHeaderIdx(ig, toGIdx) : igDropPos(ig, toGIdx, 0);
+    const result = igMoveHeader(ig, _dragSrc.gIdx, dropPos);
+    if (result) selectedRecipe.ingredient_groups = result;
   } else if (_dragSrc.type === 'ing') {
     // Ingredient dropped on a section header → move to first position in that section
     const fromArr = ig[_dragSrc.gIdx].ingredients;
     const [moved] = fromArr.splice(_dragSrc.iIdx, 1);
     ig[toGIdx].ingredients.unshift(moved);
   } else { _dragSrc = null; return; }
-  mergeAdjacentNamelessGroups(ig, 'ingredients');
   _dragSrc = null;
   patchRecipe();
   renderSavedDetail();
@@ -2295,26 +2344,9 @@ function stepDrop(e) {
     const [moved] = fromArr.splice(_dragSrc.sIdx, 1);
     sg[toGIdx].steps.splice(toSIdx, 0, moved);
   } else if (_dragSrc.type === 'step-group') {
-    // Header dropped on a step → moves ONLY the label, all steps stay.
-    const fromGIdx = _dragSrc.gIdx;
-    if (fromGIdx === toGIdx) { _dragSrc = null; return; }
-    const purpose = sg[fromGIdx].purpose;
-    sg[fromGIdx].purpose = null;
-    const srcWasRemoved = sg[fromGIdx].steps.length === 0;
-    if (srcWasRemoved) sg.splice(fromGIdx, 1);
-    const adjG = srcWasRemoved && fromGIdx < toGIdx ? toGIdx - 1 : toGIdx;
-    const tg   = sg[adjG];
-    const before = tg.steps.slice(0, toSIdx);
-    const after  = tg.steps.slice(toSIdx);
-    // New section absorbs steps from the drop point onward; before-steps stay in target group.
-    const newSec = {purpose, steps: after};
-    if (before.length) {
-      sg.splice(adjG, 1, {...tg, steps: before}, newSec);
-    } else {
-      sg.splice(adjG, 1, newSec);
-    }
+    const result = sgMoveHeader(sg, _dragSrc.gIdx, sgDropPos(sg, toGIdx, toSIdx));
+    if (result) selectedRecipe.instruction_groups = result;
   } else { _dragSrc = null; return; }
-  mergeAdjacentNamelessGroups(sg, 'steps');
   _dragSrc = null;
   patchRecipe();
   renderSavedDetail();
@@ -2344,22 +2376,15 @@ function stepGroupDrop(e) {
   if (isNaN(toGIdx)) return;
   const sg = selectedRecipe.instruction_groups;
   if (_dragSrc.type === 'step-group') {
-    // Header dropped on another header → moves ONLY the label, all steps stay.
-    const fromGIdx = _dragSrc.gIdx;
-    if (fromGIdx === toGIdx) { _dragSrc = null; return; }
-    const purpose = sg[fromGIdx].purpose;
-    sg[fromGIdx].purpose = null;
-    const srcWasRemoved = sg[fromGIdx].steps.length === 0;
-    if (srcWasRemoved) sg.splice(fromGIdx, 1);
-    const adjTo = srcWasRemoved && fromGIdx < toGIdx ? toGIdx - 1 : toGIdx;
-    sg.splice(adjTo, 0, {purpose, steps: []});
+    const dropPos = sgHeaderIdx(sg, toGIdx) !== -1 ? sgHeaderIdx(sg, toGIdx) : sgDropPos(sg, toGIdx, 0);
+    const result = sgMoveHeader(sg, _dragSrc.gIdx, dropPos);
+    if (result) selectedRecipe.instruction_groups = result;
   } else if (_dragSrc.type === 'step') {
     // Step dropped on a section header → move to first position in that section
     const fromArr = sg[_dragSrc.gIdx].steps;
     const [moved] = fromArr.splice(_dragSrc.sIdx, 1);
     sg[toGIdx].steps.unshift(moved);
   } else { _dragSrc = null; return; }
-  mergeAdjacentNamelessGroups(sg, 'steps');
   _dragSrc = null;
   patchRecipe();
   renderSavedDetail();
@@ -5855,6 +5880,14 @@ function doPrint(fullHtml) {
 }
 
 const CHANGELOG = [
+  {
+    version: "v1.3.19",
+    notes: [
+      "Section header dragging completely rewritten using a flat-list model — headers now move freely like ingredients, no orphan nameless groups ever left behind",
+      "You can now drag a section header within its own group to split it (items before the drop become nameless, items at and after the drop stay under the header)",
+      "Trailing drop zone (after last ingredient/step) now works correctly for section headers too",
+    ]
+  },
   {
     version: "v1.3.18",
     notes: [
