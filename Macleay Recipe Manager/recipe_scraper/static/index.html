@@ -4998,9 +4998,12 @@ function combineIngredients(allIngredients) {
       if (!subGroups.has(cat)) subGroups.set(cat, []);
       subGroups.get(cat).push(p);
     });
+    const hasQuantified = [...subGroups.keys()].some(k => k !== '__unparsed__');
     subGroups.forEach((subItems, cat) => {
       if (cat === '__unparsed__') {
-        subItems.forEach(p => result.push(p.original));
+        // Drop bare no-qty entries when measured entries already exist for this ingredient;
+        // the total already covers the shopping need.
+        if (!hasQuantified) subItems.forEach(p => result.push(p.original));
       } else {
         result.push(subItems.length === 1 ? subItems[0].original : mergeIngItems(subItems));
       }
