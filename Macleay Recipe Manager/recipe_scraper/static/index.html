@@ -4675,9 +4675,10 @@ function categorizeShopping(combined) {
     const savedCat = _shopSettings.ingredient_categories[key.toLowerCase()] || _shopSettings.ingredient_categories[key];
     let matched = savedCat && categorized[savedCat] !== undefined ? savedCat : null;
     if (!matched) {
-      const lower = ing.toLowerCase();
+      // Match against the ingredient NAME only (not full string with qty/unit)
+      // so "3 Cups Carrot" doesn't match keyword "cup" → Utensils
       for (const [cat, keywords] of Object.entries(SHOP_CATEGORIES)) {
-        if (keywords.some(k => lower.includes(k.toLowerCase()))) { matched = cat; break; }
+        if (keywords.some(k => key.includes(k.toLowerCase()))) { matched = cat; break; }
       }
     }
     const target = matched && categorized[matched] !== undefined ? matched : "Other";
