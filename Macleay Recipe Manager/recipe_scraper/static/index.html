@@ -4885,7 +4885,7 @@ function renderShoppingList() {
     const catHtml = Object.entries(categorized).filter(([,v]) => v.length).sort(([a],[b])=>a.localeCompare(b)).map(([cat, ings]) => `
       <div style="margin-bottom:1rem">
         <div style="font-weight:700;font-size:0.82rem;text-transform:uppercase;letter-spacing:0.6px;color:var(--red);margin-bottom:0.4rem">${esc(cat)}</div>
-        ${[...ings].sort((a,b)=>ingNameKey(parseIngForCombine(a).name||a).localeCompare(ingNameKey(parseIngForCombine(b).name||b))).map(i => `<div style="font-size:0.88rem;padding:0.15rem 0">___ ${esc(formatIngNameFirst(i))}</div>`).join("")}
+        ${[...ings].sort((a,b)=>shopSortKey(a).localeCompare(shopSortKey(b))).map(i => `<div style="font-size:0.88rem;padding:0.15rem 0">___ ${esc(formatIngNameFirst(i))}</div>`).join("")}
       </div>`).join("");
     content.innerHTML = `<div style="margin-bottom:0.5rem;font-size:0.82rem;color:var(--muted)">📦 Viewing by category. <button onclick="_shopCategoryView=false;renderShoppingList()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:0.82rem;padding:0">Back to list view</button></div>${catHtml}<p class="shop-summary">${totalItems} total ingredient${totalItems===1?"":"s"} across ${shoppingList.length} recipe${shoppingList.length===1?"":"s"}</p>`;
     return;
@@ -4963,6 +4963,20 @@ function ingNameKey(name) {
     .trim()
     .replace(/ies$/, 'y')
     .replace(/([^s])s$/, '$1'); // simple depluralize
+}
+
+// Sort key for shopping list display — extracts the ingredient name and
+// lowercases it, but intentionally keeps size descriptors (Big, Large, Small…)
+// so items sort where they visually appear (e.g. "Big Plates" under B, not P).
+function shopSortKey(ingString) {
+  const name = (parseIngForCombine(ingString).name || ingString).trim();
+  return name
+    .toLowerCase()
+    .replace(/^[-–—\s]+/, '')
+    .replace(/\(.*?\)/g, '')
+    .replace(/,\s*(optional|to taste|if desired|as needed|or to taste|for serving|for garnish|freshly ground|ground)\s*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function mergeIngItems(items) {
@@ -5147,8 +5161,7 @@ function buildShoppingHtml(listEntries, title) {
   const catSections = [...SHOP_CATEGORY_NAMES].sort((a,b)=>a.localeCompare(b)).filter(cat => categorized[cat] && categorized[cat].length)
     .map(cat => {
       const sorted = [...categorized[cat]].sort((a, b) =>
-        ingNameKey(parseIngForCombine(a).name || stripQty(a))
-          .localeCompare(ingNameKey(parseIngForCombine(b).name || stripQty(b))));
+        shopSortKey(a).localeCompare(shopSortKey(b)));
       return `<div class="cat-section">
   <div class="cat-header">${escP(cat)}</div>
   ${sorted.map(i => `<div class="ing">___ ${escP(formatIngNameFirst(i))}</div>`).join("\n  ")}
@@ -5728,7 +5741,7 @@ function buildShoppingHtmlByMeal(g) {
   if (!sections.length) return null;
   const sectionHtml = sections.map(sec => {
     const sorted = [...sec.ingredients].sort((a,b) =>
-      ingNameKey(parseIngForCombine(a).name||a).localeCompare(ingNameKey(parseIngForCombine(b).name||b))
+      shopSortKey(a).localeCompare(shopSortKey(b))
     );
     return `
     <div class="meal-section">
