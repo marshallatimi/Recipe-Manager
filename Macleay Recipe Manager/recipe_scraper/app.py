@@ -1751,28 +1751,37 @@ def api_download_update():
         return jsonify({"error": "No URL provided"}), 400
 
     def generate():
-        try:
-            req = urllib.request.Request(
-                download_url,
-                headers={"User-Agent": f"RecipeManager/{APP_VERSION}"},
-            )
-            with _urlopen_with_ssl_fallback(req, timeout=120) as resp:
-                total     = int(resp.headers.get("Content-Length") or 0)
-                tmp_path  = os.path.join(tempfile.gettempdir(), "MacleayRecipeManager-Update.exe")
-                downloaded = 0
-                with open(tmp_path, "wb") as f:
-                    while True:
-                        chunk = resp.read(131072)  # 128 KB chunks
-                        if not chunk:
-                            break
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        pct = int(downloaded * 100 / total) if total else 0
-                        yield f"data: {json.dumps({'pct': pct, 'bytes': downloaded, 'total': total})}\n\n"
+        import time
+        MAX_RETRIES = 3
+        last_err = None
+        for attempt in range(MAX_RETRIES):
+            try:
+                if attempt > 0:
+                    yield f"data: {json.dumps({'retry': attempt, 'max': MAX_RETRIES})}\n\n"
+                    time.sleep(3)
+                req = urllib.request.Request(
+                    download_url,
+                    headers={"User-Agent": f"RecipeManager/{APP_VERSION}"},
+                )
+                with _urlopen_with_ssl_fallback(req, timeout=60) as resp:
+                    total     = int(resp.headers.get("Content-Length") or 0)
+                    tmp_path  = os.path.join(tempfile.gettempdir(), "MacleayRecipeManager-Update.exe")
+                    downloaded = 0
+                    with open(tmp_path, "wb") as f:
+                        while True:
+                            chunk = resp.read(131072)  # 128 KB chunks
+                            if not chunk:
+                                break
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            pct = int(downloaded * 100 / total) if total else 0
+                            yield f"data: {json.dumps({'pct': pct, 'bytes': downloaded, 'total': total})}\n\n"
 
-            yield f"data: {json.dumps({'done': True, 'path': tmp_path})}\n\n"
-        except Exception as e:
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                yield f"data: {json.dumps({'done': True, 'path': tmp_path})}\n\n"
+                return
+            except Exception as e:
+                last_err = e
+        yield f"data: {json.dumps({'error': str(last_err)})}\n\n"
 
     return Response(
         generate(),

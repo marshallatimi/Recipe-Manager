@@ -165,6 +165,11 @@ class FileApi:
     def close_window(self):
         webview.windows[0].destroy()
 
+    def open_url(self, url):
+        """Open a URL in the system's default web browser."""
+        import webbrowser
+        webbrowser.open(url)
+
     def save_pdf_folder(self, pdfs, folder_name):
         """Ask the user for a parent folder, create a subfolder named after the
         group meal, then render each {filename, html} entry as a separate PDF."""

@@ -3165,6 +3165,7 @@ async function restoreBackup(path, filename, cookbookName) {
 // ── Auto-Update ───────────────────────────────────────────────────────────────
 
 let _updateInstallerUrl = null;  // set when an update is found
+let _updateReleaseUrl   = null;  // GitHub releases page URL
 
 async function loadVersionInfo() {
   try {
@@ -3184,6 +3185,7 @@ async function checkForUpdates(manual = false) {
     if (d.error) throw new Error(d.error);
 
     _updateInstallerUrl = d.installer_url || d.portable_url || null;
+    _updateReleaseUrl   = d.release_url || null;
 
     const installBtn = document.getElementById("settings-install-btn");
     if (d.update_available) {
@@ -3228,6 +3230,13 @@ async function startInstallUpdate() {
   if (titleEl) titleEl.textContent = "Downloading update…";
   if (msgEl)   msgEl.textContent   = "Please wait — this may take a minute.";
 
+  async function openReleaseUrl() {
+    const url = _updateReleaseUrl || _updateInstallerUrl;
+    if (!url) return;
+    if (window.pywebview) window.pywebview.api.open_url(url);
+    else window.open(url, "_blank");
+  }
+
   const es = new EventSource(`/api/download-update?url=${encodeURIComponent(_updateInstallerUrl)}`);
   es.onmessage = async (evt) => {
     const data = JSON.parse(evt.data);
@@ -3235,7 +3244,20 @@ async function startInstallUpdate() {
     if (data.error) {
       es.close();
       backdrop.hidden = true;
-      await showAlert("Download failed: " + data.error);
+      // Show friendly error with option to download manually
+      const wantManual = await showConfirm(
+        "Couldn't connect to the download server (network timeout).\n\nWould you like to open the GitHub releases page to download manually?",
+        "Open GitHub"
+      );
+      if (wantManual) openReleaseUrl();
+      return;
+    }
+
+    if (data.retry) {
+      if (titleEl) titleEl.textContent = `Retrying… (attempt ${data.retry + 1} of ${data.max})`;
+      if (msgEl)   msgEl.textContent   = "Connection timed out, trying again…";
+      if (bar)     bar.style.width     = "0%";
+      if (pctEl)   pctEl.textContent   = "";
       return;
     }
 
@@ -3272,7 +3294,11 @@ async function startInstallUpdate() {
   es.onerror = async () => {
     es.close();
     backdrop.hidden = true;
-    await showAlert("Download connection was lost. Please try again.");
+    const wantManual = await showConfirm(
+      "Download connection was lost.\n\nWould you like to open the GitHub releases page to download manually?",
+      "Open GitHub"
+    );
+    if (wantManual) openReleaseUrl();
   };
 }
 
