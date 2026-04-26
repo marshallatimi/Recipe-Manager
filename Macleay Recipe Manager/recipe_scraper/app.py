@@ -2722,11 +2722,38 @@ def _mm_rejoin_wrapped(text):
 _MM_ING_LINE = re.compile(r'^[ \t]{0,6}\d')          # starts with optional spaces then a digit
 _MM_ING_CONT = re.compile(r'^[ \t]{10,}-(?P<rest>.+)$')  # continuation: 10+ spaces + dash
 
+# Size descriptors that get prepended to the ingredient name (capitalised) rather than used as a unit
+_MM_SIZE_MAP = {
+    'sm': 'Small',
+    'md': 'Medium',
+    'lg': 'Large',
+}
+
+# Unit abbreviations → expanded form.  Omit an abbreviation to leave it as-is.
+_MM_UNIT_MAP = {
+    'T':  'Tablespoon',  'Tb': 'Tablespoon',
+    't':  'Teaspoon',
+    'c':  'Cup',
+    'cn': 'Can',
+    'pn': 'Pinch',
+    'pk': 'Pack',
+    'qt': 'Quart',
+    'pt': 'Pint',
+    'ds': 'Dash',
+    'ct': 'Carton',
+    'bn': 'Bunch',
+    # Normalise case variants but keep the abbreviation
+    'Oz': 'oz',
+    'Ea': 'ea',
+    # oz, lb, ea, fl, sl, mg, dr — not in map → left as-is
+}
+
 
 def _parse_mm_ing_line(line):
     """
     Parse one fixed-width Meal-Master ingredient line.
-    Returns an ingredient string like "2 T Olive Oil", or None if not recognised.
+    Expands known unit abbreviations; prepends size words (sm/md/lg) to the name.
+    Returns an ingredient string like "2 Tablespoon Olive Oil", or None if not recognised.
     """
     # Pad to at least 12 chars so slice indices are safe
     padded = line.ljust(12)
@@ -2738,6 +2765,13 @@ def _parse_mm_ing_line(line):
         return None
     if not re.match(r'^\d', qty):      # qty must start with a digit
         return None
+
+    # Size descriptor → prepend to name, drop as unit
+    if unit in _MM_SIZE_MAP:
+        name = _MM_SIZE_MAP[unit] + ' ' + name
+        unit = ''
+    else:
+        unit = _MM_UNIT_MAP.get(unit, unit)   # expand known, keep unknown as-is
 
     return ' '.join(filter(None, [qty, unit, name]))
 
