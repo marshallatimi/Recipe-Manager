@@ -1263,8 +1263,36 @@ function setIngSearchMode(val) {
   applySort();
 }
 
+// Parse a search query into tokens.
+// Quoted phrases ("ea") get exact whole-word matching; bare words get substring matching.
+function parseSearchQuery(raw) {
+  const tokens = [];
+  const re = /"([^"]+)"|(\S+)/g;
+  let m;
+  while ((m = re.exec(raw)) !== null) {
+    const text = (m[1] !== undefined ? m[1] : m[2]).toLowerCase();
+    if (text) tokens.push({ text, exact: m[1] !== undefined });
+  }
+  return tokens;
+}
+
+// Test whether all tokens match against the combined haystack of field strings.
+// exact tokens use \bword\b; bare tokens use substring includes().
+function matchesSearch(tokens, ...fields) {
+  if (!tokens.length) return true;
+  const haystack = fields.filter(Boolean).join(' ').toLowerCase();
+  return tokens.every(tok => {
+    if (tok.exact) {
+      const esc = tok.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp('\\b' + esc + '\\b').test(haystack);
+    }
+    return haystack.includes(tok.text);
+  });
+}
+
 function getSortedRecipes() {
-  const q = (document.getElementById("recipe-search-input")?.value || "").trim().toLowerCase();
+  const rawQ  = (document.getElementById("recipe-search-input")?.value || "").trim();
+  const tokens = parseSearchQuery(rawQ);
   const rCats = r => r.categories && r.categories.length ? r.categories : (r.category ? [r.category] : []);
   let list = _activeCatFilters.size > 0
     ? savedRecipes.filter(r => {
@@ -1272,16 +1300,13 @@ function getSortedRecipes() {
         return [..._activeCatFilters].some(f => rc.includes(f));
       })
     : [...savedRecipes];
-  if (q) {
+  if (tokens.length) {
     list = list.filter(r => {
       if (_ingSearchMode) {
-        const allIngs = (r.ingredient_groups||[]).flatMap(g => g.ingredients||[]).join(" ").toLowerCase();
-        return allIngs.includes(q) || (r.title||"").toLowerCase().includes(q);
+        const allIngs = (r.ingredient_groups||[]).flatMap(g => g.ingredients||[]).join(" ");
+        return matchesSearch(tokens, allIngs, r.title);
       }
-      return (r.title || "").toLowerCase().includes(q) ||
-        rCats(r).join(" ").toLowerCase().includes(q) ||
-        (r.servings || "").toLowerCase().includes(q) ||
-        (r.site_name || "").toLowerCase().includes(q);
+      return matchesSearch(tokens, r.title, rCats(r).join(" "), r.servings, r.site_name);
     });
   }
   switch (currentSort) {
