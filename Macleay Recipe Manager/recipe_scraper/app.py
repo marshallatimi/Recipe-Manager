@@ -2593,6 +2593,319 @@ def parse_accuchef_csv(csv_path):
     return recipes
 
 
+def _strip_rtf(rtf_text):
+    """
+    Extract plain text from an RTF block as produced by AccuChef.
+    Uses a stack-based parser so nested {groups} are handled correctly.
+    """
+    if not rtf_text.strip().startswith('{\\rtf'):
+        return rtf_text
+
+    # Groups whose entire content should be suppressed (font/color tables, etc.)
+    SKIP_GROUPS = {
+        'fonttbl', 'colortbl', 'stylesheet', 'info', 'filetbl',
+        'listtable', 'listoverridetable', 'rsidtbl', 'generator',
+    }
+
+    result     = []
+    i          = 0
+    n          = len(rtf_text)
+    depth      = 0
+    skip_depth = None   # set to depth level when we enter a skip-group
+
+    while i < n:
+        ch = rtf_text[i]
+
+        if ch == '{':
+            depth += 1
+            # Peek ahead: if the group opens with a skip-word, suppress it
+            if skip_depth is None:
+                j = i + 1
+                if j < n and rtf_text[j] == '\\':
+                    k = j + 1
+                    while k < n and rtf_text[k].isalpha():
+                        k += 1
+                    cw = rtf_text[j + 1:k]
+                    if cw in SKIP_GROUPS:
+                        skip_depth = depth
+            i += 1
+
+        elif ch == '}':
+            if skip_depth == depth:
+                skip_depth = None
+            depth -= 1
+            i += 1
+
+        elif ch == '\\':
+            i += 1
+            if i >= n:
+                break
+            nc = rtf_text[i]
+
+            if nc == "'":
+                # Hex escape  \'xx  →  character
+                hex_str = rtf_text[i + 1:i + 3]
+                try:
+                    char = bytes.fromhex(hex_str).decode('cp1252', errors='replace')
+                    if skip_depth is None:
+                        result.append(char)
+                except Exception:
+                    pass
+                i += 3
+
+            elif nc in ('\r', '\n'):
+                # Bare backslash-newline in RTF source = ignored
+                i += 1
+
+            elif nc.isalpha():
+                # Control word: \word[-][\d+][ ]
+                j = i
+                while j < n and rtf_text[j].isalpha():
+                    j += 1
+                cw = rtf_text[i:j]
+                if j < n and rtf_text[j] == '-':
+                    j += 1
+                while j < n and rtf_text[j].isdigit():
+                    j += 1
+                if j < n and rtf_text[j] == ' ':
+                    j += 1          # consume optional space delimiter
+                if skip_depth is None:
+                    if cw == 'par':
+                        result.append('\n')
+                    elif cw == 'line':
+                        result.append('\n')
+                    elif cw == 'tab':
+                        result.append('\t')
+                    # All other control words are silently dropped
+                i = j
+
+            else:
+                # Non-alpha symbol  (\~, \-, \:, \* …) — skip
+                i += 1
+
+        elif ch in ('\r', '\n'):
+            # Literal newlines in RTF source are not content
+            i += 1
+
+        else:
+            if skip_depth is None and depth >= 1:
+                result.append(ch)
+            i += 1
+
+    text = ''.join(result)
+    # Normalise each line, drop lines that are pure RTF table artifacts (e.g. "Lucida Casual;")
+    lines = [' '.join(l.split()) for l in text.splitlines()]
+    lines = [l for l in lines if l and not re.match(r'^[;\s]+$', l)]
+    text  = re.sub(r'\n{3,}', '\n\n', '\n'.join(lines)).strip()
+    return text
+
+
+def _mm_rejoin_wrapped(text):
+    """
+    Undo Meal-Master's 72-column hard word-wrap while keeping intentional
+    blank lines (paragraph breaks).
+
+    Rule:
+      • Blank lines  →  intentional break, preserved
+      • Consecutive non-blank lines  →  word-wrap artefact, joined with a space
+    """
+    paragraphs = re.split(r'\n{2,}', text.strip())
+    result = []
+    for para in paragraphs:
+        lines = [l.strip() for l in para.splitlines() if l.strip()]
+        if lines:
+            result.append(' '.join(lines))
+    return '\n\n'.join(result)
+
+
+# Fixed-width ingredient line: qty right-aligned in cols 0-6, unit in cols 8-9, name from col 11
+_MM_ING_LINE = re.compile(r'^[ \t]{0,6}\d')          # starts with optional spaces then a digit
+_MM_ING_CONT = re.compile(r'^[ \t]{10,}-(?P<rest>.+)$')  # continuation: 10+ spaces + dash
+
+
+def _parse_mm_ing_line(line):
+    """
+    Parse one fixed-width Meal-Master ingredient line.
+    Returns an ingredient string like "2 T Olive Oil", or None if not recognised.
+    """
+    # Pad to at least 12 chars so slice indices are safe
+    padded = line.ljust(12)
+    qty  = padded[0:7].strip()
+    unit = padded[8:10].strip()
+    name = line[11:].strip() if len(line) > 11 else ''
+
+    if not qty or not name:
+        return None
+    if not re.match(r'^\d', qty):      # qty must start with a digit
+        return None
+
+    return ' '.join(filter(None, [qty, unit, name]))
+
+
+def _parse_mm_block(block):
+    """Parse one MMMMM…----- recipe block into a recipe dict."""
+    lines = block.splitlines()
+
+    title        = None
+    categories   = []
+    servings     = None
+    servings_num = None
+
+    # ── 1. Header (Title / Categories / Yield) ────────────────────────────────
+    i = 0
+    while i < len(lines):
+        line    = lines[i]
+        stripped = line.strip()
+
+        if re.match(r'^MMMMM[-]+', stripped):
+            i += 1
+            continue
+
+        m_title = re.match(r'^\s*Title:\s*(.+)',      line)
+        m_cats  = re.match(r'^\s*Categories?:\s*(.+)', line, re.IGNORECASE)
+        m_yield = re.match(r'^\s*Yield:\s*(.+)',       line, re.IGNORECASE)
+
+        if m_title:
+            title = m_title.group(1).strip()
+        elif m_cats:
+            cats_raw   = m_cats.group(1).strip()
+            categories = [c.strip() for c in cats_raw.split(',') if c.strip()]
+        elif m_yield:
+            yield_raw = m_yield.group(1).strip()
+            parts     = yield_raw.split()
+            if parts:
+                servings_num = parse_servings_num(parts[0])
+                unit_word    = parts[1] if len(parts) > 1 else ''
+                servings     = f"{parts[0]} {unit_word}".strip()
+        elif stripped == '' and title:
+            # First blank line after header fields = end of header section
+            i += 1
+            break
+
+        i += 1
+
+    if not title:
+        return None
+
+    # ── 2. Ingredient lines ────────────────────────────────────────────────────
+    ing_groups    = []
+    current_group = {'purpose': None, 'ingredients': []}
+    last_ing_idx  = None   # for appending continuation text
+
+    while i < len(lines):
+        line = lines[i]
+
+        # Blank line → end of ingredient section
+        if not line.strip():
+            i += 1
+            break
+
+        # Continuation line  "           -rest of name"
+        cont = _MM_ING_CONT.match(line)
+        if cont and last_ing_idx is not None:
+            current_group['ingredients'][last_ing_idx] += ' ' + cont.group('rest').strip()
+            i += 1
+            continue
+
+        # Group separator inside ingredients (e.g. "--- Marinade ---")
+        if re.match(r'^[-=]{3,}', line.strip()):
+            if current_group['ingredients'] or current_group['purpose']:
+                ing_groups.append(current_group)
+            purpose       = re.sub(r'^[-=\s]+|[-=\s]+$', '', line).strip() or None
+            current_group = {'purpose': purpose, 'ingredients': []}
+            last_ing_idx  = None
+            i += 1
+            continue
+
+        # Normal ingredient line
+        ing_str = _parse_mm_ing_line(line)
+        if ing_str:
+            current_group['ingredients'].append(ing_str)
+            last_ing_idx = len(current_group['ingredients']) - 1
+
+        i += 1
+
+    if current_group['ingredients'] or (not ing_groups and current_group.get('purpose')):
+        ing_groups.append(current_group)
+
+    # ── 3. Notes + Instructions ────────────────────────────────────────────────
+    rest_text = '\n'.join(lines[i:])
+
+    # Pull out [Note: …] block (may span multiple lines)
+    notes_raw  = None
+    note_match = re.search(r'\[Note:\s*(.*?)\]', rest_text, re.DOTALL | re.IGNORECASE)
+    if note_match:
+        notes_raw = note_match.group(1).strip()
+        rest_text = rest_text[:note_match.start()] + rest_text[note_match.end():]
+
+    # Strip RTF markup if present
+    rest_text = rest_text.strip()
+    if rest_text.startswith('{\\rtf'):
+        rest_text = _strip_rtf(rest_text)
+
+    # Strip trailing nutritional-info line(s) that AccuChef appends
+    rest_text = re.sub(
+        r'\n?Per\s+\w[\w\s]*:.*$',
+        '', rest_text, flags=re.DOTALL | re.IGNORECASE,
+    ).strip()
+    rest_text = re.sub(r'\naccupoints\s*=.*$', '', rest_text, flags=re.IGNORECASE).strip()
+
+    # Re-join word-wrap artefacts; preserve intentional blank lines
+    directions = _mm_rejoin_wrapped(rest_text) if rest_text else None
+
+    flat_ings = [ing for g in ing_groups for ing in g['ingredients']]
+
+    return {
+        'title':              title,
+        'servings':           servings,
+        'servings_num':       servings_num,
+        'ingredients':        flat_ings,
+        'instructions':       [],
+        'ingredient_groups':  ing_groups,
+        'instruction_groups': None,
+        'directions_text':    directions or None,
+        'notes':              notes_raw  or None,
+        'image':              None,
+        'total_time':         None,
+        'site_name':          'AccuChef Import',
+        'source_url':         None,
+        'category':           categories[0] if categories else None,
+        'categories':         categories,
+    }
+
+
+def parse_meal_master_txt(path):
+    """
+    Parse an AccuChef 'Export Meal-Master Format' .TXT file.
+    Returns a list of recipe dicts compatible with _insert_recipes_into_db().
+    """
+    # Encoding detection — AccuChef on Windows typically writes cp1252
+    text = None
+    for enc in ('utf-8-sig', 'cp1252', 'latin-1'):
+        try:
+            text = open(path, encoding=enc, errors='strict').read()
+            break
+        except (UnicodeDecodeError, LookupError):
+            continue
+    if text is None:
+        text = open(path, encoding='utf-8-sig', errors='replace').read()
+
+    HEADER_RE = re.compile(r'^MMMMM[-]+\s+Recipe via Meal-Master', re.MULTILINE)
+    END_RE    = re.compile(r'^-----\s*$',                            re.MULTILINE)
+
+    starts  = [m.start() for m in HEADER_RE.finditer(text)]
+    recipes = []
+
+    for start in starts:
+        end_match = END_RE.search(text, start + 10)
+        block     = text[start:end_match.start()].strip() if end_match else text[start:].strip()
+        recipe    = _parse_mm_block(block)
+        if recipe:
+            recipes.append(recipe)
+
+    return recipes
+
+
 def detect_and_parse_csv(csv_path):
     """Auto-detect RM vs AccuChef CSV and return (type_str, recipes)."""
     with io.StringIO(_read_csv_text(csv_path)) as f:
@@ -2636,8 +2949,8 @@ def upload_temp_cookbook():
         return jsonify({"error": "No file provided"}), 400
     f   = request.files["file"]
     ext = os.path.splitext(f.filename or "")[1].lower()
-    if ext not in (".cookbook", ".csv"):
-        return jsonify({"error": "Unsupported file type. Use .cookbook or .csv"}), 400
+    if ext not in (".cookbook", ".csv", ".txt"):
+        return jsonify({"error": "Unsupported file type. Use .cookbook, .csv, or .txt"}), 400
     tmp = tempfile.NamedTemporaryFile(suffix=ext, delete=False, dir=DATA_DIR)
     f.save(tmp.name)
     tmp.close()
@@ -2649,6 +2962,10 @@ def upload_temp_cookbook():
         except Exception:
             count = 0
         file_type = "cookbook"
+    elif ext == ".txt":
+        recipes   = parse_meal_master_txt(tmp.name)
+        count     = len(recipes)
+        file_type = "meal_master"
     else:
         csv_type, recipes = detect_and_parse_csv(tmp.name)
         count     = len(recipes)
@@ -2682,8 +2999,12 @@ def peek_cookbook():
         display_type = "csv_rm" if csv_type == "rm" else "csv"
         return jsonify({"type": display_type, "recipeCount": len(recipes),
                         "suggestedName": os.path.splitext(os.path.basename(path))[0]})
+    elif ext == ".txt":
+        recipes = parse_meal_master_txt(path)
+        return jsonify({"type": "meal_master", "recipeCount": len(recipes),
+                        "suggestedName": os.path.splitext(os.path.basename(path))[0]})
     else:
-        return jsonify({"error": "Unsupported file type. Use .cookbook or .csv"}), 400
+        return jsonify({"error": "Unsupported file type. Use .cookbook, .csv, or .txt"}), 400
 
 
 @app.route("/cookbooks/import", methods=["POST"])
@@ -2711,10 +3032,14 @@ def import_cookbook():
             count = 0
         _invalidate_cookbooks_cache()
         return jsonify({"ok": True, "name": safe, "path": dest_path, "recipeCount": count})
-    elif ext == ".csv":
-        _csv_type, recipes = detect_and_parse_csv(src_path)
+    elif ext in (".csv", ".txt"):
+        if ext == ".txt":
+            recipes = parse_meal_master_txt(src_path)
+        else:
+            _csv_type, recipes = detect_and_parse_csv(src_path)
         if not recipes:
-            return jsonify({"error": "No recipes could be read from this CSV file."}), 422
+            fmt = "Meal-Master .txt" if ext == ".txt" else "CSV"
+            return jsonify({"error": f"No recipes could be read from this {fmt} file."}), 422
         # Create the new cookbook and populate it
         old_path = _active_db["path"]
         _active_db["path"] = dest_path
@@ -2731,7 +3056,7 @@ def import_cookbook():
         return jsonify({"ok": True, "name": safe, "path": dest_path,
                         "recipeCount": len(recipes)})
     else:
-        return jsonify({"error": "Unsupported file type"}), 400
+        return jsonify({"error": "Unsupported file type. Use .cookbook, .csv, or .txt"}), 400
 
 
 @app.route("/cookbooks/export", methods=["POST"])
